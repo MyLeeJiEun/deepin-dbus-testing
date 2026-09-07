@@ -1,0 +1,43 @@
+# 构建产物
+build/
+obj-*/
+out/
+dist/
+*.egg-info/
+.eggs/
+
+# Python
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# 报告产物(dbus-testing run --report)
+artifacts/
+junit.xml
+results.json
+report.html
+contract-live.xml
+
+# 打包中间物
+debian/.debhelper/
+debian/files
+debian/*.substvars
+debian/*.debhelper
+debian/debhelper-build-stamp
+debian/python3-dbus-testing/
+debian/dbus-testing-dsm-host/
+debian/tmp/
+.pybuild/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+*~
+.pytest_cache/

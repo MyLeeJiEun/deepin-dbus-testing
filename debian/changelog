@@ -1,0 +1,14 @@
+deepin-dbus-testing (0.1.0) unstable; urgency=medium
+
+  * 首个版本:配置驱动的 DDE DBus 接口测试框架。
+  * 私有总线 + 临时 HOME/XDG 的密闭运行环境,只消费构建产物路径,
+    不调用被测项目的构建系统、不写入被测项目源码。
+  * 六原语(call/get-prop/set-prop/wait-signal/check-contract/mock-state)
+    与五断言(signature/value/type/error/nonempty),用例为纯 YAML。
+  * 契约基线用规范化后的标准 introspection XML;支持源码声明/基线/运行时
+    三方比对(check --static 不拉起服务)。
+  * 报告:junit.xml / results.json / report.html / contract-live.xml。
+  * 样板配置:examples/pinyin1、examples/graphic1(均为实测通过的 T1 形态)。
+  * 可选 C++ 组件包 dbus-testing-dsm-host 的打包骨架已就位,宿主实现随 P5 提供。
+
+ -- zhaofangxun <zhaofangxun@uniontech.com>  Thu, 03 Sep 2026 10:00:00 +0800

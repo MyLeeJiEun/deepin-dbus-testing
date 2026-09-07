@@ -1,0 +1,41 @@
+#!/usr/bin/make -f
+
+# 纯 Python 核心包:setuptools 元数据已在 pyproject.toml,pybuild 直接消费。
+export PYBUILD_NAME = dbus-testing
+
+# 可选 C++ 组件(唯一一个):DSM 插件宿主替身。
+DSM_BUILD = obj-dsm-host
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_configure:
+	dh_auto_configure
+	cmake -S hosts/dsm-host -B $(DSM_BUILD) \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr
+
+override_dh_auto_build:
+	dh_auto_build
+	cmake --build $(DSM_BUILD) --parallel
+
+override_dh_auto_install:
+	dh_auto_install
+	DESTDIR=$(CURDIR)/debian/tmp cmake --install $(DSM_BUILD)
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf $(DSM_BUILD)
+
+# 框架自测需要 dbus-daemon 与 python3-dbusmock,构建期不跑,CI 里单独跑 pytest。
+override_dh_auto_test:
+
+# 说明(勿删):
+# 1. dh_python3 负责把 dbus_testing/ 装到 usr/lib/python3/dist-packages/,
+#    把 [project.scripts] 的 dbus-testing 装到 usr/bin/,无需手写 .install 条目;
+#    文档与样板走 debian/python3-dbus-testing.{docs,examples}(源码树相对路径,
+#    由 dh_installdocs / dh_installexamples 处理,不经 debian/tmp)。
+# 2. hosts/dsm-host 由上面的 override 用 cmake 装到 debian/tmp/usr/libexec/dbus-testing/,
+#    再由 debian/dbus-testing-dsm-host.install 收进独立二进制包;本框架自身的构建规则
+#    与"不调用被测项目构建系统"的约束无关(该约束约束的是框架运行时行为,见 README)。
+# 3. pyproject.toml 走 PEP 517,必须 Build-Depend on pybuild-plugin-pyproject。

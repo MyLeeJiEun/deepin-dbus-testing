@@ -1,0 +1,14 @@
+<node>
+  <object path="/org/deepin/dde/Pinyin1">
+    <interface name="org.deepin.dde.Pinyin1">
+      <method name="Query">
+        <arg name="hans" type="s" direction="in"/>
+        <arg name="pinyin" type="as" direction="out"/>
+      </method>
+      <method name="QueryList">
+        <arg name="hansList" type="as" direction="in"/>
+        <arg name="jsonStr" type="s" direction="out"/>
+      </method>
+    </interface>
+  </object>
+</node>

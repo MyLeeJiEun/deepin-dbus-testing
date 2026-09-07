@@ -1,0 +1,31 @@
+# T3 样板:强依赖 systemd 的服务如何密闭测试。
+# 关键点:needs: 里的 mock 必须先于被测进程启动;systemd_dde 模板补齐了
+# 上游 dbusmock systemd 模板缺失的 Subscribe / ListUnitsByPatterns /
+# StartTransientUnit 与 Manager.Environment 属性(缺任一项 AM 都会 abort)。
+apiVersion: v1
+process: dde-application-manager
+mode: isolate
+kind: process
+tier: T3
+services:
+  - org.desktopspec.ApplicationManager1
+binary:
+  search:
+    - ${BUILD_DIR}/apps/dde-application-manager/src/dde-application-manager
+    - /usr/bin/dde-application-manager
+sandbox:
+  home: tmp
+  env:
+    QT_QPA_PLATFORM: offscreen
+    DSG_APP_ID: org.deepin.dde.application-manager
+needs:
+  - mock: systemd_dde
+ready:
+  name-owner:
+    - org.desktopspec.ApplicationManager1
+  timeout: 25s
+ignore:
+  interfaces:
+    - "org.freedesktop.DBus.*"
+  paths:
+    - "/org/desktopspec/ApplicationManager1/*"

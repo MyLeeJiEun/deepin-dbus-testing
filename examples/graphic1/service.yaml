@@ -1,0 +1,36 @@
+# Graphic1 样板配置(T1:密闭注册成功,已实测)
+#
+# 实测依据(dbus-dev 附录 A.2):Graphic1 在无显示的私有会话总线上注册成功,
+# 推翻了"依赖 X11"的静态判断 —— 档位只由实测认定。
+#
+# 用法:
+#   go build -o out/ ./... && dbus-testing run examples/graphic1 --build-dir out
+
+apiVersion: v1
+process: graphic
+mode: isolate
+kind: process
+tier: T1
+
+services:
+  - org.deepin.dde.Graphic1
+
+binary:
+  search:
+    - ${BUILD_DIR}/graphic
+    - ${BUILD_DIR}/bin/graphic
+    - /usr/lib/deepin-api/graphic
+
+sandbox:
+  home: tmp
+
+ready:
+  name-owner:
+    - org.deepin.dde.Graphic1
+  timeout: 10s
+
+ignore:
+  interfaces:
+    - org.freedesktop.DBus.*
+
+teardown: kill

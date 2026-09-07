@@ -1,0 +1,56 @@
+Source: deepin-dbus-testing
+Section: devel
+Priority: optional
+Maintainer: zhaofangxun <zhaofangxun@uniontech.com>
+Build-Depends: debhelper-compat (= 13),
+ dh-python,
+ pybuild-plugin-pyproject,
+ python3-all,
+ python3-setuptools,
+ cmake,
+ g++,
+ qt6-base-dev,
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/linuxdeepin/deepin-dbus-testing
+X-Python3-Version: >= 3.11
+
+Package: python3-dbus-testing
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends},
+ python3,
+ python3-dbus,
+ python3-gi,
+ python3-yaml,
+ dbus-daemon | dbus,
+Recommends: python3-dbusmock
+Suggests: dbus-testing-dsm-host
+Description: Configuration-driven DBus interface test framework for DDE
+ dbus-testing runs interface tests against freshly built binaries on a private
+ D-Bus, driven by YAML only: no glue code and no changes to the code under test.
+ .
+ It talks to the service under test through the bus alone, so the service may be
+ written in any language. Test cases are six primitives (call, get-prop,
+ set-prop, wait-signal, check-contract, mock-state) and five assertions
+ (signature, value, type, error, nonempty); reports are emitted as JUnit XML,
+ JSON and a single-file HTML page.
+ .
+ Install python3-dbusmock to isolate services that need mocked dependencies.
+
+Package: dbus-testing-dsm-host
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Enhances: python3-dbus-testing
+Description: Optional DSM plugin host stand-in for dbus-testing
+ A minimal Qt-based host that dlopen()s a deepin-service-manager plugin and
+ calls its DSMRegister() entry point on a caller-supplied bus address, because
+ deepin-service-manager itself resolves its plugin config directory at compile
+ time and cannot be pointed at a build tree.
+ .
+ This is the only non-Python component of the framework; it is packaged
+ separately and only needed for "kind: dsm" services. When it is not installed,
+ dbus-testing degrades those services to "mode: attach".
+ .
+ Verified against the real dde-appearance DSM plugin: it handles both the
+ canonical style (the host registers the bus name) and the common style where
+ the plugin registers the name itself through QDBusConnection::sessionBus().

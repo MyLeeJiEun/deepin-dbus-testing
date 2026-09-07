@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepin-dbus-testing"
+version = "0.1.0"
+description = "Configuration-driven DBus interface test framework for DDE projects"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "LGPL-3.0-or-later" }
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# dbus-python 与 PyGObject 通常由发行版包提供(python3-dbus / python3-gi),
+# 故不列入强制依赖,避免在 deb 环境下重复编译。
+runtime = ["dbus-python>=1.3", "PyGObject>=3.42"]
+mock = ["python-dbusmock>=0.30"]
+test = ["pytest>=7.0", "python-dbusmock>=0.30"]
+
+[project.scripts]
+dbus-testing = "dbus_testing.cli:main"
+
+[project.entry-points.pytest11]
+# 入口名保持稳定为 dbus_testing:pytest 的 entry point 加载器按名字去重,
+# 同名多份元数据(如既装了 deb 又用 PYTHONPATH 指源码树)会被跳过而不报冲突;
+# 改名会在升级过程中造成"同一模块两个名字"的重复注册错误。
+# 显式加载请用自动加载或 conftest 的 pytest_plugins,不要再传 -p。
+dbus_testing = "dbus_testing.pytest_plugin"
+
+[tool.setuptools.packages.find]
+include = ["dbus_testing*"]
+
+[tool.setuptools.package-data]
+dbus_testing = ["mocktemplates/*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "RET", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["dbus.*", "gi.*", "dbusmock.*", "yaml.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["needs_dde: 需要已安装的 DDE 服务(默认跳过)"]

@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3 python3-pip python3-dbus python3-gi python3-yaml \
+            python3-pytest python3-dbusmock dbus git
+          python3 -m pip install --break-system-packages ruff || true
+
+      - name: 不侵入约束守卫(必须先跑,防实现期漂移)
+        run: python3 -m pytest tests/test_noninvasive.py -v
+
+      - name: 静态检查
+        run: |
+          python3 -m compileall -q dbus_testing tests
+          python3 -m ruff check dbus_testing tests || true
+          python3 - <<'PY'
+          import pathlib, sys
+          bad = [
+              f"{p}:{i}"
+              for p in list(pathlib.Path("dbus_testing").rglob("*.py"))
+                     + list(pathlib.Path("tests").rglob("*.py"))
+              for i, line in enumerate(p.read_text().splitlines(), 1)
+              if len(line) > 100
+          ]
+          if bad:
+              print("超过 100 列的行:", *bad, sep="\n  ")
+              sys.exit(1)
+          PY
+
+      - name: 框架自测(不依赖 DDE 环境)
+        run: python3 -m pytest -q
+
+  dsm-host:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 Qt6
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            cmake g++ qt6-base-dev
+      - name: 编译可选组件 dsm-host
+        run: |
+          cmake -S hosts/dsm-host -B build-dsm-host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-dsm-host -j"$(nproc)"
+          test -x build-dsm-host/dbus-testing-dsm-host

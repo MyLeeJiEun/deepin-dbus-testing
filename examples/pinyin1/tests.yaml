@@ -1,0 +1,44 @@
+# Pinyin1 样板用例
+#
+# 每条断言的期望值都取自真实 introspect 与真实调用,不是想象值:
+#   Query      s  → as     Query("深度")    → ["shendu", "shenduo"]
+#   QueryList  as → s      QueryList(["深度"]) → JSON 字符串
+#   Query("")             → as 长度 0,且不报错(空输入不是错误路径)
+#
+# Target 省略规则:service 缺省取 services[0];path 由服务名推导
+# (org.deepin.dde.Pinyin1 → /org/deepin/dde/Pinyin1);interface 缺省等于 service。
+# 因此下面只写 method 即可。
+
+apiVersion: v1
+cases:
+  # ---- 值断言:真实调用 + 返回值逐值比对 ----
+  - name: query-returns-pinyin
+    call: { method: Query, args: ["深度"] }
+    expect:
+      signature: as
+      value: ["shendu", "shenduo"]
+
+  # ---- 签名断言:只锁返回签名,不锁具体值(值随词库变化) ----
+  - name: query-list-signature
+    call: { method: QueryList, args: [["深度"]] }
+    expect:
+      signature: s
+      nonempty: true
+
+  # ---- 边界:空输入返回空列表且必须无错(error: null 显式声明"必须成功")----
+  - name: query-empty-input
+    call: { method: Query, args: [""] }
+    expect:
+      signature: as
+      value: []
+      error: null
+
+  # ---- 错误面:不存在的方法必须报 UnknownMethod ----
+  - name: unknown-method-rejected
+    call: { method: NoSuchMethod }
+    expect:
+      error: org.freedesktop.DBus.Error.UnknownMethod
+
+  # ---- 契约:运行时 introspect 规范化后与 contract.xml 逐字节比对 ----
+  - name: contract
+    check-contract: true

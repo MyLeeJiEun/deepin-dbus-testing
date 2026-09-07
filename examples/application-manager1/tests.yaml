@@ -1,0 +1,21 @@
+apiVersion: v1
+cases:
+  - name: object-manager-signature
+    call:
+      interface: org.desktopspec.DBus.ObjectManager
+      method: GetManagedObjects
+    expect: {signature: "a{oa{sa{sv}}}"}
+  - name: list-property-readable
+    get-prop: {property: List}
+    expect: {type: ao}
+  - name: reload-applications-ok
+    call: {method: ReloadApplications}
+    expect: {error: null}
+  - name: identify-rejects-bad-fd
+    call: {method: Identify, args: [-1]}
+    expect: {error: "*"}
+  - name: unknown-method-rejected
+    call: {method: NoSuchMethod}
+    expect: {error: org.freedesktop.DBus.Error.UnknownMethod}
+  - name: contract
+    check-contract: true

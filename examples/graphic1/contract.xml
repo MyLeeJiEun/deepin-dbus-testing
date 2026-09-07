@@ -1,0 +1,121 @@
+<node>
+  <object path="/org/deepin/dde/Graphic1">
+    <interface name="org.deepin.dde.Graphic1">
+      <method name="BlurImage">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="sigma" type="d" direction="in"/>
+        <arg name="numSteps" type="d" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="ClipImage">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="x" type="i" direction="in"/>
+        <arg name="y" type="i" direction="in"/>
+        <arg name="w" type="i" direction="in"/>
+        <arg name="h" type="i" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="CompositeImage">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="compFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="x" type="i" direction="in"/>
+        <arg name="y" type="i" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="CompositeImageUri">
+        <arg name="srcDataUri" type="s" direction="in"/>
+        <arg name="compDataUri" type="s" direction="in"/>
+        <arg name="x" type="i" direction="in"/>
+        <arg name="y" type="i" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+        <arg name="resultDataUri" type="s" direction="out"/>
+      </method>
+      <method name="ConvertDataUriToImage">
+        <arg name="dataUri" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="ConvertImage">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="ConvertImageToDataUri">
+        <arg name="imgfile" type="s" direction="in"/>
+        <arg name="dataUri" type="s" direction="out"/>
+      </method>
+      <method name="FillImage">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="width" type="i" direction="in"/>
+        <arg name="height" type="i" direction="in"/>
+        <arg name="style" type="s" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="FlipImageHorizontal">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="FlipImageVertical">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="GetDominantColorOfImage">
+        <arg name="imgFile" type="s" direction="in"/>
+        <arg name="h" type="d" direction="out"/>
+        <arg name="s" type="d" direction="out"/>
+        <arg name="v" type="d" direction="out"/>
+      </method>
+      <method name="GetImageSize">
+        <arg name="imgFile" type="s" direction="in"/>
+        <arg name="width" type="i" direction="out"/>
+        <arg name="height" type="i" direction="out"/>
+      </method>
+      <method name="Hsv2Rgb">
+        <arg name="h" type="d" direction="in"/>
+        <arg name="s" type="d" direction="in"/>
+        <arg name="v" type="d" direction="in"/>
+        <arg name="r" type="y" direction="out"/>
+        <arg name="g" type="y" direction="out"/>
+        <arg name="b" type="y" direction="out"/>
+      </method>
+      <method name="ResizeImage">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="newWidth" type="i" direction="in"/>
+        <arg name="newHeight" type="i" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="Rgb2Hsv">
+        <arg name="r" type="y" direction="in"/>
+        <arg name="g" type="y" direction="in"/>
+        <arg name="b" type="y" direction="in"/>
+        <arg name="h" type="d" direction="out"/>
+        <arg name="s" type="d" direction="out"/>
+        <arg name="v" type="d" direction="out"/>
+      </method>
+      <method name="RotateImageLeft">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="RotateImageRight">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+      <method name="ThumbnailImage">
+        <arg name="srcFile" type="s" direction="in"/>
+        <arg name="dstFile" type="s" direction="in"/>
+        <arg name="maxWidth" type="u" direction="in"/>
+        <arg name="maxHeight" type="u" direction="in"/>
+        <arg name="format" type="s" direction="in"/>
+      </method>
+    </interface>
+  </object>
+</node>

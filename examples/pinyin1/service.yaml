@@ -1,0 +1,41 @@
+# Pinyin1 样板配置(T1:密闭可跑,已实测)
+#
+# 实测依据(dbus-dev 附录 A.2):私有会话总线上拉起 hans2pinyin,
+# 注册 org.deepin.dde.Pinyin1 成功,introspect 得 Query(s→as) / QueryList(as→s)。
+#
+# 用法:
+#   go build -o out/ ./... && dbus-testing run examples/pinyin1 --build-dir out
+# 未构建时也可用系统安装路径兜底(search 的最后一条)。
+
+apiVersion: v1
+process: hans2pinyin
+mode: isolate # 密闭:私有总线 + 临时 HOME
+kind: process # 独立进程形态,argv 就是 [binary]
+tier: T1 # 档位只由实测认定,勿凭源码推断
+
+services:
+  - org.deepin.dde.Pinyin1
+
+binary:
+  # 按序查找,第一个存在者胜 —— 构建产物优先,系统路径仅兜底
+  search:
+    - ${BUILD_DIR}/hans2pinyin
+    - ${BUILD_DIR}/bin/hans2pinyin
+    - /usr/lib/deepin-api/hans2pinyin
+
+sandbox:
+  home: tmp # 临时 HOME/XDG_*,跑完即删
+  # Pinyin1 是纯计算服务,不需要额外环境变量;
+  # Qt GUI 服务在此加 QT_QPA_PLATFORM: offscreen
+
+ready:
+  name-owner:
+    - org.deepin.dde.Pinyin1
+  timeout: 10s
+
+ignore:
+  # 契约比对时折叠标准接口(Introspectable / Properties / Peer)
+  interfaces:
+    - org.freedesktop.DBus.*
+
+teardown: kill

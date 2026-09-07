@@ -1,0 +1,31 @@
+# Graphic1 样板用例(契约面 + 签名面)
+#
+# 接口来自真实 introspect(busctl --user introspect org.deepin.dde.Graphic1
+# /org/deepin/dde/Graphic1):18 个方法,**无属性、无信号**,所以本文件没有
+# get-prop / set-prop / wait-signal 用例 —— 样板只写接口真实存在的东西。
+#
+# Graphic1 的多数方法会**写图片文件**(BlurImage / ClipImage / ResizeImage /
+# ThumbnailImage / ConvertImage ...),属于有副作用的行为面:本样板一律不调用,
+# 需要时走 test_extra.py 逃生舱(自备临时输入输出目录)。
+# 这里只保留两类零副作用断言:契约比对 + 纯计算方法的返回签名。
+
+apiVersion: v1
+cases:
+  # 纯计算:HSV → RGB,声明为 Hsv2Rgb(h:d, s:d, v:d) → (r:y, g:y, b:y)
+  - name: hsv2rgb-signature
+    call: { method: Hsv2Rgb, args: [0.0, 1.0, 1.0] }
+    expect:
+      signature: yyy
+
+  # 同族的 Rgb2Hsv 入参是 byte(yyy):YAML 整数会按 int32 编码而被服务拒收,
+  # 需要显式类型标注,故先声明跳过而不是留一条注定失败的用例。
+  - name: rgb2hsv-signature
+    skip: "入参为 byte(yyy),tests.yaml 暂无入参类型标注;走 test_extra.py 或待框架支持后启用"
+    call: { method: Rgb2Hsv, args: [255, 0, 0] }
+    expect:
+      signature: ddd
+
+  # 契约:运行时 introspect 规范化后与 contract.xml 比对,
+  # 18 个方法的任一签名/删改都会被 diff 定位到成员级
+  - name: contract
+    check-contract: true
