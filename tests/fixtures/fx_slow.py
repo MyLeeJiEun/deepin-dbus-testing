@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import time
@@ -42,10 +43,8 @@ def main() -> int:
     bus_name = dbus.service.BusName(BUS_NAME, bus, do_not_queue=True)
     service = FxSlow(bus, OBJ_PATH)
     print(f"fx_slow: 已注册 {bus_name.get_name()} @ {service.__dbus_object_path__}", flush=True)
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         GLib.MainLoop().run()
-    except KeyboardInterrupt:
-        pass
     return 0
 
 

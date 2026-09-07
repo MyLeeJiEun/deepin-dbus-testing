@@ -53,6 +53,12 @@ disallow_untyped_defs = true
 module = ["dbus.*", "gi.*", "dbusmock.*", "yaml.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# dbusmock 模板是运行时复制给 python-dbusmock 动态加载的载荷文件,
+# 回调签名由 dbusmock 约定,不参与框架类型检查。
+module = ["dbus_testing.mocktemplates.*"]
+disallow_untyped_defs = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["needs_dde: 需要已安装的 DDE 服务(默认跳过)"]

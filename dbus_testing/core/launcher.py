@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
@@ -85,17 +86,13 @@ class ServiceHandle:
         try:
             os.killpg(os.getpgid(self.process.pid), sig)
         except (ProcessLookupError, PermissionError, OSError):
-            try:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
                 self.process.send_signal(sig)
-            except (ProcessLookupError, PermissionError):
-                pass
         try:
             self.process.wait(timeout=5)
         except subprocess.TimeoutExpired:  # pragma: no cover - 极端情况
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 self.process.kill()
-            except ProcessLookupError:
-                pass
 
 
 class Launcher:
@@ -124,10 +121,7 @@ class Launcher:
 
     def _resolve_dsm_host(self) -> str:
         for cand in DSM_HOST_CANDIDATES:
-            if "/" in cand:
-                found = cand if Path(cand).exists() else None
-            else:
-                found = shutil.which(cand)
+            found = (cand if Path(cand).exists() else None) if "/" in cand else shutil.which(cand)
             if found:
                 return found
         raise ConfigError(

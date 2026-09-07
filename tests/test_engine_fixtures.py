@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from dbus_testing.engine import run_suite
 from tests.conftest import make_suite
 
@@ -177,12 +175,12 @@ cases:
 
 
 def test_check_contract_pass_and_drift(tmp_path: Path) -> None:
-    from dbus_testing.scanner import normalize_tree
     from dbus_testing.core.bus import BusType, PrivateBus
     from dbus_testing.core.client import BusClient
     from dbus_testing.core.launcher import Launcher
     from dbus_testing.core.sandbox import Sandbox
     from dbus_testing.model import IgnoreSpec, SandboxSpec, load_service
+    from dbus_testing.scanner import normalize_tree
     from dbus_testing.scanner.introspect import snapshot
 
     cases = "apiVersion: v1\ncases:\n  - name: contract\n    check-contract: true\n"

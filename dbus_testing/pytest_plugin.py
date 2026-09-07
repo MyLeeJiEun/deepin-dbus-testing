@@ -14,7 +14,6 @@ import pytest
 from .core.diagnose import diagnose
 from .core.guard import AttachGuard
 from .engine import (
-    CONTRACT_FILENAME,
     SERVICE_FILENAME,
     TESTS_FILENAME,
     Engine,

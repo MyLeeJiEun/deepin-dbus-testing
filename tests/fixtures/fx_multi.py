@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 
@@ -44,10 +45,8 @@ def main() -> int:
         path = "/" + name.replace(".", "/")
         owned.append((dbus.service.BusName(name, bus, do_not_queue=True), FxMulti(bus, path, name)))
     print("fx_multi: 已注册 " + " ".join(n.get_name() for n, _ in owned), flush=True)
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         GLib.MainLoop().run()
-    except KeyboardInterrupt:
-        pass
     return 0
 
 

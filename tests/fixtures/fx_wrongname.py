@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 
@@ -40,10 +41,8 @@ def main() -> int:
         f"fx_wrongname: 已注册 {bus_name.get_name()} @ {service.__dbus_object_path__}",
         flush=True,
     )
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         GLib.MainLoop().run()
-    except KeyboardInterrupt:
-        pass
     return 0
 
 

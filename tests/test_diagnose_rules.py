@@ -252,9 +252,8 @@ def test_polkit_declaration_without_mock_warns(
     spec = load_service(suite / "service.yaml")
     assert spec.is_polkit_gated("org.example.FxEcho", "Boom")
     assert not spec.is_polkit_gated("org.example.FxEcho", "Echo")
-    with caplog.at_level(logging.WARNING, logger="dbus_testing.engine"):
-        with Session(spec):
-            pass
+    with caplog.at_level(logging.WARNING, logger="dbus_testing.engine"), Session(spec):
+        pass
     assert any("polkitd" in rec.message for rec in caplog.records), [
         r.message for r in caplog.records
     ]

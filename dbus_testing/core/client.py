@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from collections.abc import Callable, Iterator
@@ -31,8 +32,8 @@ try:  # pragma: no cover - 依赖发行版包
 
     _DBUS_IMPORT_ERROR: Exception | None = None
 except Exception as exc:  # pragma: no cover
-    dbus = None  # type: ignore[assignment]
-    DBusGMainLoop = None  # type: ignore[assignment]
+    dbus = None
+    DBusGMainLoop = None
     _DBUS_IMPORT_ERROR = exc
 
 try:  # pragma: no cover - 依赖发行版包
@@ -40,7 +41,7 @@ try:  # pragma: no cover - 依赖发行版包
 
     _GLIB_IMPORT_ERROR: Exception | None = None
 except Exception as exc:  # pragma: no cover
-    GLib = None  # type: ignore[assignment]
+    GLib = None
     _GLIB_IMPORT_ERROR = exc
 
 DBUS_SERVICE = "org.freedesktop.DBus"
@@ -360,16 +361,12 @@ class BusClient:
         try:
             yield received
         finally:
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - 连接已断
                 match.remove()
-            except Exception:  # pragma: no cover - 连接已断
-                pass
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):  # pragma: no cover - 已关闭
             self._conn.close()
-        except Exception:  # pragma: no cover - 已关闭
-            pass
 
 
 def _guess_variant(value: Any) -> Any:

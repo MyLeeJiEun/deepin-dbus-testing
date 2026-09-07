@@ -10,8 +10,6 @@ import sys
 from pathlib import Path
 from xml.etree import ElementTree
 
-import pytest
-
 from dbus_testing.engine import run_suite
 from dbus_testing.errors import EXIT_CONFIG, EXIT_ENV, EXIT_FAILED, EXIT_OK
 from dbus_testing.report import write_html, write_json, write_junit

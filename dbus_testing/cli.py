@@ -28,7 +28,6 @@ from .engine import (
     CONTRACT_FILENAME,
     SERVICE_FILENAME,
     TESTS_FILENAME,
-    Engine,
     Session,
     build_coverage,
     load_baseline,
@@ -46,8 +45,8 @@ from .errors import (
 from .model import Case, IgnoreSpec, SandboxSpec, load_service, service_name_to_path
 from .report import write_html, write_json, write_junit
 from .results import CaseResult, RunResult
-from .scanner.draft import ProbeResult, draft_service, draft_tests
 from .scanner.diff import diff
+from .scanner.draft import ProbeResult, draft_service, draft_tests
 from .scanner.introspect import snapshot
 from .scanner.normalize import normalize_tree
 from .scanner.srcxml import src_baseline_xml, static_diff

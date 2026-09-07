@@ -23,11 +23,12 @@ from .errors import (
     ReadyTimeout,
     SignalTimeout,
 )
-from .model import Case, IgnoreSpec, ServiceSpec, Step, Target, load_cases
+from .model import Case, IgnoreSpec, ServiceSpec, Step, load_cases
 from .results import (
     CallOutcome,
     CaseResult,
     CoverageMatrix,
+    DeclaredStatus,
     Delta,
     MemberCoverage,
     RunResult,
@@ -528,18 +529,18 @@ def build_coverage(
                 continue
             cov = matrix.get(step.target.interface, step.target.member)
             if cov is None:
-                kind = {
+                op_kind = {
                     "call": "method",
                     "get-prop": "property",
                     "set-prop": "property",
                     "wait-signal": "signal",
                 }.get(step.op)
-                if kind is None:
+                if op_kind is None:
                     continue
                 cov = MemberCoverage(
                     interface=step.target.interface,
                     member=step.target.member,
-                    kind=kind,  # type: ignore[arg-type]
+                    kind=op_kind,  # type: ignore[arg-type]
                     declared="unknown",
                 )
                 matrix.add(cov)
@@ -557,7 +558,7 @@ def _declared_status(
     src_sig: str | None,
     *,
     has_src: bool,
-) -> str:
+) -> DeclaredStatus:
     if in_base and in_live and base_sig != live_sig:
         return "mismatch"
     if has_src and in_src and in_base and src_sig != base_sig:
