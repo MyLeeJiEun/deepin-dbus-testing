@@ -18,6 +18,10 @@ jobs:
           apt-get install -y --no-install-recommends \
             python3 python3-pip python3-dbus python3-gi python3-yaml \
             python3-pytest python3-dbusmock dbus git
+          # bookworm apt 的 python3-dbusmock 是 0.28.7,低于 pyproject 声明的 >=0.30
+          # (SpawnedMock.spawn_with_template / BusType 需要 0.30+);pip 装到 /usr/local 抢占 apt 版本
+          python3 -m pip install --break-system-packages 'python-dbusmock>=0.30'
+          # ruff 为建议性检查,失败不阻塞
           python3 -m pip install --break-system-packages ruff || true
 
       - name: 不侵入约束守卫(必须先跑,防实现期漂移)
@@ -53,7 +57,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            cmake g++ qt6-base-dev
+            cmake g++ make qt6-base-dev
       - name: 编译可选组件 dsm-host
         run: |
           cmake -S hosts/dsm-host -B build-dsm-host -DCMAKE_BUILD_TYPE=Release
