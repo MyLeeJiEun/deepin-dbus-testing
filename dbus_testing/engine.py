@@ -17,6 +17,7 @@ from .core.mockdeps import MockDeps
 from .core.sandbox import Sandbox
 from .errors import (
     AssertionFailed,
+    ConfigError,
     ContractDrift,
     DbusTestingError,
     ProcessDied,
@@ -94,13 +95,16 @@ class Session:
     def start(self) -> None:
         spec = self.spec
         bus_env: dict[str, str] = {}
-
+        session_address: str = ""
+        # 被测服务的主交互总线:system-bus 服务注册在 system bus 上,
+        # 测试客户端(就绪探测、用例调用)也必须走 system bus,否则永远等不到就绪。
         if spec.mode == "attach":
             bus_env = attach_bus_env(BusType.SESSION)
             address = bus_env[BusType.SESSION.env_name]
         else:
             self.bus = PrivateBus(BusType.SESSION)
-            address = self.bus.start()
+            session_address = self.bus.start()
+            address = session_address
             bus_env.update(self.bus.env)
             if self.keep:
                 self.bus.keep()
@@ -110,6 +114,7 @@ class Session:
                 bus_env.update(self.system_bus.env)
                 if self.keep:
                     self.system_bus.keep()
+                address = self.system_bus.address
 
         self.env = dict(bus_env)
         self.client = BusClient(address)
@@ -117,6 +122,12 @@ class Session:
         if spec.mode == "attach":
             self.handle = self.launcher.attach(spec, address)
             return
+
+        if any(m.bus == "system" for m in spec.needs) and self.system_bus is None:
+            raise ConfigError(
+                f"{spec.source}: needs 里有 bus: system 的 mock,"
+                f"请在 service.yaml 加 system-bus: true,否则 mock 会回退到真实 system bus"
+            )
 
         if spec.has_polkit_rules and not any(
             "polkit" in m.template.lower() for m in spec.needs
@@ -133,7 +144,7 @@ class Session:
         os.environ.update(bus_env)
         try:
             self.mocks.start(
-                address,
+                session_address,
                 self.system_bus.address if self.system_bus is not None else None,
             )
         finally:

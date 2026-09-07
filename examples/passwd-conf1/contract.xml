@@ -1,0 +1,46 @@
+<node>
+  <object path="/org/deepin/dde/PasswdConf1">
+    <interface name="org.deepin.dde.PasswdConf1">
+      <method name="Backup"/>
+      <method name="GetEnabled">
+        <arg name="enabled" type="b" direction="out"/>
+      </method>
+      <method name="GetFirstLetterUpper">
+        <arg name="enabled" type="b" direction="out"/>
+      </method>
+      <method name="GetLengthLimit">
+        <arg name="minLength" type="i" direction="out"/>
+        <arg name="maxLength" type="i" direction="out"/>
+      </method>
+      <method name="GetValidatePolicy">
+        <arg name="validatePolicy" type="s" direction="out"/>
+      </method>
+      <method name="GetValidateRequired">
+        <arg name="validateRequired" type="i" direction="out"/>
+      </method>
+      <method name="ReadConfig">
+        <arg name="data" type="s" direction="out"/>
+      </method>
+      <method name="Reset"/>
+      <method name="SetEnabled">
+        <arg name="enabled" type="b" direction="in"/>
+      </method>
+      <method name="SetFirstLetterUpper">
+        <arg name="enabled" type="b" direction="in"/>
+      </method>
+      <method name="SetLengthLimit">
+        <arg name="minLength" type="i" direction="in"/>
+        <arg name="maxLength" type="i" direction="in"/>
+      </method>
+      <method name="SetValidatePolicy">
+        <arg name="validatePolicy" type="s" direction="in"/>
+      </method>
+      <method name="SetValidateRequired">
+        <arg name="validateRequired" type="i" direction="in"/>
+      </method>
+      <method name="WriteConfig">
+        <arg name="data" type="s" direction="in"/>
+      </method>
+    </interface>
+  </object>
+</node>

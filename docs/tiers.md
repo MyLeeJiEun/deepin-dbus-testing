@@ -16,10 +16,10 @@
 | `org.deepin.dde.Appearance1` | T3 | dsm | ✅ 密闭跑通 | 经 `dsm-host` 加载真实 `libplugin-dde-appearance.so`,私有总线注册成功;7 对象 / 3 接口;4 用例全绿 |
 | `org.desktopspec.ApplicationManager1` | T3 | process | ✅ 密闭跑通(需 `systemd_dde` mock) | 挂 `needs: [systemd_dde]` 后私有总线注册成功,6 用例全绿(ObjectManager 签名 / List 属性 / ReloadApplications / 错误路径 / 契约);**isolate 抓到的接口面与 attach 抓到的逐字节一致**。补齐过程:官方 dbusmock systemd 模板缺 `Subscribe` → 加上后卡在 `no such property Environment` → 补 `Manager.Environment` 后通过(诊断逐步指出了每一处缺失) |
 | `org.deepin.dde.Device1` | T3 | process | ⏳ 待实测 | system bus + root + `/dev/rfkill` + 蓝牙硬件 |
-| `org.deepin.dde.PasswdConf1` | T3 | process | ⏳ 待实测 | system bus + root + polkit + 写 `/etc/deepin/dde.conf` |
+| `org.deepin.dde.PasswdConf1` | T2(读面)/T3(写面) | process | ✅ 密闭跑通 | `system-bus: true` + `needs: [polkitd(system)]`:私有 system bus 上注册成功,5 用例全绿(签名/值断言、polkit 拒绝与放行、契约)。读方法不需要 root;写方法会真实写 `/etc/deepin/dde.conf`,且需 root,归 T3 |
 | `org.desktopspec.ConfigManager`(dconfig-daemon) | T3 | process | ⏳ 待实测 | system bus,`.conf` 策略限定 `deepin-daemon`/root 可 own |
-| dde-shell 各面板服务 | T3 | plugin-host | ⏳ 阻塞 | 宿主插件加载参数待实测(开发文档附录 B.1);在此之前只支持 `attach` |
-| dde-tray-loader 插件服务 | T3 | plugin-host | ⏳ 阻塞 | 同上 |
+| `org.deepin.dde.Keyboard1`(tray-loader 插件) | T3 | plugin-host | ✅ 密闭跑通(条件:依赖存在性替身) | `trayplugin-loader -p <单个插件 .so>` offscreen 下加载成功;插件对 `InputDevices1` 的存在性检查由 `dde_inputdevices` 替身满足;4 用例全绿(属性/契约)。样板 `examples/tray-keyboard`。注意:wayland 会话下 3 个录制类插件被宿主黑名单跳过 |
+| dde-shell 各面板服务 | T3 | plugin-host | ⏳ 待验证 | DPluginLoader/applet 机制与 tray-loader 的 `-p` 不同,待单独实测;在此之前只支持 `attach` |
 
 ## 待补服务(尚未建档)
 

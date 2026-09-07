@@ -381,3 +381,16 @@ gdbus call --session --dest <svc> --object-path <path> --method <iface>.<method>
 ```
 
 接会话总线时把 `--address="$DBUS_SESSION_BUS_ADDRESS"` 换成 `--user` 即可。**在真实会话总线上只做 introspect 与读属性**,调用会改你自己的桌面状态。
+
+### 特殊场景:mock 总线配置矛盾(E_CONFIG_INVALID)
+
+| 症状 | 原因 | 修正 |
+|---|---|---|
+| `E_CONFIG_INVALID: needs 里有 bus: system 的 mock,请在 service.yaml 加 system-bus: true` | needs 里声明了 system 总线的 mock,但配置没启用私有 system bus → mock 会回退到**真实 system bus**(既不密闭,又必然 already owned) | 在 service.yaml 加 `system-bus: true` |
+
+### 特殊场景:mock 已放行但服务仍报依赖缺失
+
+服务依赖的 mock 起在了错误的总线上(如服务连 system bus,而 mock 在 session bus)。服务侧错误是
+`ServiceUnknown`(不是 UnknownMethod),诊断的 missing 列表可能为空——此时看 `spawn时环境` 行
+或服务输出尾部,确认 mock 与服务在同一条总线:system 总线服务需同时写 `system-bus: true` 与
+`needs: [{mock: X, bus: system}]`。

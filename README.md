@@ -72,8 +72,9 @@ outdir/
 | `mode: attach`(接真实会话,只读兜底) | **已验证** | 真实会话 introspect ApplicationManager1 / SystemInfo1 / Appearance1 三形态成功;AM 的 `check`(运行时 vs 基线)与 `check --static`(源码声明 vs 基线)均跑通,后者不需拉起服务 |
 | 动态子对象归并 | **已验证** | AM 的 `/org/desktopspec/ApplicationManager1/*` 在基线中归并为单个 `collapsed` 节点,不会把上百个子对象全 introspect |
 | Qt GUI 服务 | **已验证需 `QT_QPA_PLATFORM=offscreen`** | 无显示时报 `could not load the Qt platform plugin "xcb"`;诊断会直接给出这条提示 |
-| 私有 system bus(`system-bus: true`) | **未实测** | 机制已实现(注入 `DBUS_SYSTEM_BUS_ADDRESS` + `<allow own="*"/>`),但尚无真实 system bus 服务跑通的证据 |
-| `kind: plugin-host`(dde-shell / dde-tray-loader) | **待实测** | 宿主能否定向加载自建 `.so` 尚无结论;无法定向则该形态只支持 `attach` |
+| 私有 system bus(`system-bus: true`) | **已验证** | 实测 deepin-pw-check(PasswdConf1):客户端/就绪探测/用例全部走私有 system bus;polkit 查询经 `polkitd` mock(system)完成,`mock-state` 按 action 精确放行 |
+| `kind: plugin-host`(tray-loader) | **已验证** | `trayplugin-loader -p <单个插件 .so>` offscreen 下加载 keyboard 插件并注册 `Keyboard1`;插件对 `InputDevices1` 的存在性检查由替身模板满足。样板 `examples/tray-keyboard`。dde-shell 形态待实测 |
+| system bus 服务(`PasswdConf1`,T2) | **已验证** | 5 用例全绿:polkitd mock 默认拒绝/按 action 放行两个方向都有断言。样板见 `examples/passwd-conf1` |
 | 强依赖服务密闭(`ApplicationManager1` isolate) | **已验证** | 挂上框架自带的 `systemd_dde` mock 模板后,AM 在私有总线上注册成功,6 用例全绿;isolate 与 attach 抓到的接口面逐字节一致。样板见 `examples/application-manager1` |
 
 逐服务档位与证据见 [docs/tiers.md](docs/tiers.md)。

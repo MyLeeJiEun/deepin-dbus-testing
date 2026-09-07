@@ -1,0 +1,33 @@
+# T3 样板:plugin-host 形态(tray-loader 宿主 + keyboard-layout 插件,已实测)。
+#
+# 机制:trayplugin-loader -p <单个插件 .so>;插件在 init() 里注册服务名与对象。
+#
+# 关键依赖:keyboard 插件只有检测到 org.deepin.dde.InputDevices1(dde-daemon 的
+# inputdevices 模块)已注册时才创建导出方法的对象;缺失时是"空壳"(只有名字与
+# 标准接口)。needs: 用只注册名字的替身模板 dde_inputdevices 解决。
+#
+# 宿主是 GUI 程序(Wayland/DGuiApplicationHelper),offscreen 下实测可加载插件。
+# 黑名单:wayland 会话下 -p 会跳过 3 个录制类插件(与本样板无关)。
+apiVersion: v1
+process: trayplugin-loader
+mode: isolate
+kind: plugin-host
+tier: T3
+host-binary: /usr/libexec/trayplugin-loader
+plugin: /usr/lib/dde-dock/plugins/system-trays/libkeyboard-layout.so
+services:
+  - org.deepin.dde.Keyboard1
+needs:
+  - mock: dde_inputdevices
+
+sandbox:
+  home: tmp
+  env:
+    QT_QPA_PLATFORM: offscreen
+ready:
+  name-owner:
+    - org.deepin.dde.Keyboard1
+  timeout: 20s
+ignore:
+  interfaces:
+    - "org.freedesktop.DBus.*"

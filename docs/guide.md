@@ -365,6 +365,7 @@ sandbox:
     DSG_APP_ID: org.deepin.dde.application-manager
 needs:
   - mock: systemd_dde            # 框架自带:补齐上游 dbusmock systemd 模板的缺口
+    bus: system                  # mock 放在哪条总线(缺省 session)
 ignore:
   paths: ["/org/desktopspec/ApplicationManager1/*"]   # 动态子对象归并
 ```
@@ -665,8 +666,8 @@ dbus-testing init --from-running <服务名> --out /tmp/probe   # 拉不起来�
 
 | 项 | 状态 | 影响 |
 |---|---|---|
-| `kind: plugin-host`(dde-shell / dde-tray-loader) | 宿主定向加载 `.so` 的参数未实测 | 这些仓先用 `mode: attach` |
-| 私有 system bus(`system-bus: true`) | 机制已实现,无真实 system bus 服务验证 | 需 root 的服务(Device1 / PasswdConf1)接入时一并验证 |
+| ~~plugin-host(tray-loader)~~ → **已验证** | `-p` 支持单文件路径;插件依赖(`InputDevices1` 存在性)用替身模板满足。**dde-shell 仍待实测**(DPluginLoader 机制不同) | dde-shell 仓先用 `mode: attach` |
+| ~~私有 system bus~~ → **已验证** | PasswdConf1 实测跑通(`examples/passwd-conf1`);`needs` 里 system 总线的 mock(polkitd)同样可用 | —— |
 | `tests.yaml` 入参类型标注 | 无 | byte / uint 等窄类型入参走逃生舱(`examples/graphic1` 里有一条按此跳过的用例) |
 
 **已知限制**:有外部副作用的行为不配置化;用例语言故意很小(不做条件/循环/变量插值);私有总线默认不挂标准 servicedir,依赖必须显式写进 `needs:`。

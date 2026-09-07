@@ -695,10 +695,11 @@ flowchart LR
 ### P4 · mock 与权限(1.5 天)
 - [ ] `core/mockdeps.py`(顺序强制 + 不保真检测)、私有 system bus、`auth.polkit` + polkitd mock
 - [ ] `mocktemplates/` 首批(systemd 扩展、ConfigManager)
-- **验收**:
+- **验收(已达成,2026-09-07 实测)**:
   1. `fx_needdep` 报 `E_MOCK_UNFAITHFUL` 并给出缺失方法名;
-  2. 至少一个 T2 服务(建议 SystemInfo1,`kind: go-loader --enable systeminfo`)密闭跑通契约;
-  3. system bus 服务能在私有 system bus 注册
+  2. T2 服务密闭跑通:SystemInfo1(`go-loader --enable systeminfo`)
+     与 PasswdConf1(`system-bus: true`,含 polkitd mock)均已验证;
+  3. system bus 服务能在私有 system bus 注册(实现要点:`system-bus: true` 时测试客户端与就绪探测必须切到 system bus,初版遗漏已由 PasswdConf1 实测暴露并修复)
 
 ### P5 · 形态扩展(2 天)
 - [ ] `hosts/dsm-host` + `kind: dsm`;`kind: plugin-host`(先实测宿主参数,附录 B.1)

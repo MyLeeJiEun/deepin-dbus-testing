@@ -119,7 +119,14 @@ class MockDeps:
             except Exception as exc:
                 self.stop()
                 raise MockUnfaithful(
-                    f"启动依赖 mock {spec.template!r} 失败: {exc}", missing=[]
+                    f"启动依赖 mock {spec.template!r} 失败: {exc}",
+                    missing=[],
+                    spawn_error=(
+                        f"{exc} [spawn时环境: SESSION="
+                        f"{os.environ.get('DBUS_SESSION_BUS_ADDRESS', '(未设置)')[:70]} | "
+                        f"SYSTEM={os.environ.get('DBUS_SYSTEM_BUS_ADDRESS', '(未设置)')[:70]}]"
+                    ),
+                    spawn_bus=spec.bus,
                 ) from exc
             finally:
                 for key, value in saved.items():

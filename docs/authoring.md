@@ -43,7 +43,8 @@ dpkg -L <包名> | grep -E "(bin|libexec)/|\.so"
 | 独立可执行文件(`/usr/bin/xxx`、`/usr/lib/deepin-api/xxx`) | `process` | 只需 `binary.search` |
 | 只有 daemon 二进制,目标服务是它的一个模块 | `go-loader` | `module: <模块名>` |
 | `deepin-service-manager/lib*.so` + `plugin-*.json` | `dsm` | `plugin: <so 路径>` |
-| dde-shell applet / tray-loader 插件 | `plugin-host` | **未实测,先用 `mode: attach`** |
+| tray-loader 插件 | `plugin-host` | 已实测:`-p` 支持单个 `.so`;按插件的实际依赖配 `needs:`(如 keyboard 依赖 `InputDevices1` 存在性,用 `dde_inputdevices` 替身) |
+| dde-shell applet | 未实测 | 先用 `mode: attach` |
 
 真实例子:
 

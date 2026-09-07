@@ -1,0 +1,19 @@
+<node>
+  <object path="/org/deepin/dde/Keyboard1">
+    <interface name="org.deepin.dde.Keyboard1">
+      <method name="onClicked">
+        <arg name="button" type="i" direction="in"/>
+        <arg name="x" type="i" direction="in"/>
+        <arg name="y" type="i" direction="in"/>
+      </method>
+      <signal name="fcitxStatusChanged">
+        <arg name="running" type="b"/>
+      </signal>
+      <signal name="layoutChanged">
+        <arg name="text" type="s"/>
+      </signal>
+      <property name="fcitxRunning" type="b" access="read"/>
+      <property name="layout" type="s" access="readwrite"/>
+    </interface>
+  </object>
+</node>

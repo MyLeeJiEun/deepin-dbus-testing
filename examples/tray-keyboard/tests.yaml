@@ -1,0 +1,13 @@
+apiVersion: v1
+cases:
+  - name: layout-prop-signature
+    get-prop: {property: layout}
+    expect: {type: s}
+  - name: fcitx-running-type
+    get-prop: {property: fcitxRunning}
+    expect: {type: b}
+  - name: layout-readonly          # access=readwrite,但写布局是副作用,只验证存在与只读保护不存在
+    get-prop: {property: layout}
+    expect: {signature: s}
+  - name: contract
+    check-contract: true

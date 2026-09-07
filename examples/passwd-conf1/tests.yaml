@@ -1,0 +1,21 @@
+apiVersion: v1
+cases:
+  - name: length-limit-signature          # GetLengthLimit 不走 polkit
+    call: {method: GetLengthLimit}
+    expect: {signature: ii, value: [1, 510]}
+  - name: read-config-rejected-by-default # polkitd mock 默认拒绝一切 action
+    call: {method: ReadConfig}
+    expect: {error: "*"}
+  - name: read-config-after-allow         # mock-state 精确放行该 action 后可读
+    steps:
+      - mock-state:
+          template: polkitd
+          method: SetAllowed
+          args: [["org.deepin.dde.passwdconf.modify-config"]]
+      - call: {method: ReadConfig}
+        expect: {signature: s, nonempty: true}
+  - name: validate-policy-after-allow
+    call: {method: GetValidatePolicy}
+    expect: {signature: s, nonempty: true}
+  - name: contract
+    check-contract: true

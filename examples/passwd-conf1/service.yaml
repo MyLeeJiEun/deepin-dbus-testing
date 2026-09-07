@@ -1,0 +1,33 @@
+# T2 样板:system-bus 服务的密闭测试(已实测,deepin-pw-check 的 Go 服务)。
+#
+# 要点:
+# 1. system-bus: true —— 测试客户端(就绪探测、用例调用)自动切到私有 system bus,
+#    被测进程也通过注入的 DBUS_SYSTEM_BUS_ADDRESS 连上同一条总线;
+# 2. polkit:该服务的读方法(ReadConfig 等)也查 polkit。私有 system bus 上没有
+#    真实 polkitd,必须挂 needs: [mock: polkitd, bus: system];mock 默认拒绝一切,
+#    用 mock-state 原语按 action 精确放行(见 tests.yaml);
+# 3. 该服务 30s 空闲自退出(dbusutil SetAutoQuitHandler),套件务必保持快速。
+apiVersion: v1
+process: deepin-pw-check
+mode: isolate
+kind: process
+tier: T2
+system-bus: true
+services:
+  - org.deepin.dde.PasswdConf1
+binary:
+  search:
+    - ${BUILD_DIR}/deepin-pw-check
+    - /usr/libexec/deepin-pw-check/deepin-pw-check
+needs:
+  - mock: polkitd
+    bus: system             # polkitd 也在私有 system bus 上
+sandbox:
+  home: tmp
+ready:
+  name-owner:
+    - org.deepin.dde.PasswdConf1
+  timeout: 15s
+ignore:
+  interfaces:
+    - "org.freedesktop.DBus.*"

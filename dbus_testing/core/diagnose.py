@@ -123,6 +123,9 @@ def diagnose(exc: BaseException) -> Diagnosis:
     if isinstance(exc, MockUnfaithful):
         missing = _ctx(exc, "missing", []) or []
         listed = "\n".join(f"  - {m}" for m in missing)
+        spawn_error = _ctx(exc, "spawn_error")
+        if spawn_error:
+            listed = f"  启动失败原因: {spawn_error}" + (f"\n{listed}" if listed else "")
         snippet = ""
         if missing:
             iface, _, method = str(missing[0]).rpartition(".")
