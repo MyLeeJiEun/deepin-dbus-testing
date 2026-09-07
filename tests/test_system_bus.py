@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from dbus_testing.engine import run_suite
 from tests.conftest import make_suite
 
@@ -53,7 +55,9 @@ def test_system_bus_session_bus_both_started(tmp_path: Path) -> None:
     assert "system_bus_address" in env
 
 
-def test_system_and_session_mocks_do_not_interfere(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_system_and_session_mocks_do_not_interfere(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
     """needs 混合编排:同名 mock 模板分别放到 session 与 system 总线,互不干扰。"""
     import dbus as _d
     _orig = type(_d.bus.BusConnection).__new__ if False else None

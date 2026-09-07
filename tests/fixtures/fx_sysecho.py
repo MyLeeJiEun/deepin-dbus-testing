@@ -16,9 +16,7 @@ if not addr:
 
 import dbus  # noqa: E402
 import dbus.service  # noqa: E402
-
 from dbus.mainloop.glib import DBusGMainLoop  # noqa: E402
-
 from gi.repository import GLib  # noqa: E402
 
 DBusGMainLoop(set_as_default=True)
