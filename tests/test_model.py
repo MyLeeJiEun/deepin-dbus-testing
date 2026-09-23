@@ -193,3 +193,9 @@ def test_duplicate_case_names_rejected(tmp_path: Path) -> None:
 def test_missing_tests_yaml_is_empty(tmp_path: Path) -> None:
     spec = load_service(_write(tmp_path, BASE))
     assert load_cases(tmp_path / "nope.yaml", spec) == []
+
+
+def test_attach_restart_per_case_rejected(tmp_path: Path) -> None:
+    """attach 模式下服务不由框架拉起,restart: per-case 无法成立,必须早失败。"""
+    with pytest.raises(ConfigError, match="restart: per-case"):
+        load_service(_write(tmp_path, BASE + "mode: attach\nrestart: per-case\n"))

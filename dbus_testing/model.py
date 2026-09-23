@@ -464,6 +464,11 @@ def _validate_service(spec: ServiceSpec) -> None:
     for name in spec.ready.name_owner:
         if not name or name.startswith(":"):
             raise ConfigError(f"{spec.source}: ready.name-owner 含非法总线名 {name!r}")
+    if spec.mode == "attach" and spec.restart == "per-case":
+        raise ConfigError(
+            f"{spec.source}: restart: per-case 要求框架自己拉起服务,"
+            f"attach 模式下服务不由框架管理;请去掉该字段或改用 mode: isolate"
+        )
 
 
 def _guess_repo_root(start: Path) -> Path:

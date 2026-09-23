@@ -290,3 +290,119 @@ cases:
     assert counter is not None and counter.executed_by == ["counter-case"]
     boom = result.coverage.get(ECHO, "Boom")
     assert boom is not None and not boom.executed, "未被调用的方法不应计入执行覆盖"
+
+
+def test_isolation_per_case_resets_service_state(tmp_path: Path) -> None:
+    """isolation: per-case:每条用例重建总线+服务,c1 写入的状态 c2 不可见。"""
+    suite = _suite(
+        tmp_path,
+        """apiVersion: v1
+cases:
+  - name: write-42
+    steps:
+      - set-prop: {property: Counter, value: 42}
+      - get-prop: {property: Counter}
+        expect: {value: 42}
+  - name: expect-fresh
+    get-prop: {property: Counter}
+    expect: {value: 0}
+""",
+        extra_service="isolation: per-case\n",
+    )
+    result = _run(suite)
+    assert [c.status for c in result.cases] == ["pass", "pass"], [
+        (c.name, c.status, c.detail) for c in result.cases
+    ]
+
+
+def test_isolation_per_run_shares_service_state(tmp_path: Path) -> None:
+    """默认 per-run:同一进程跑完整套,状态跨用例可见(顺序敏感是既成语义)。"""
+    suite = _suite(
+        tmp_path,
+        """apiVersion: v1
+cases:
+  - name: write-42
+    set-prop: {property: Counter, value: 42}
+  - name: still-42
+    get-prop: {property: Counter}
+    expect: {value: 42}
+""",
+    )
+    result = _run(suite)
+    assert [c.status for c in result.cases] == ["pass", "pass"], [
+        (c.name, c.status, c.detail) for c in result.cases
+    ]
+
+
+def test_isolation_per_case_new_bus_and_process(tmp_path: Path) -> None:
+    """per-case 的总线粒度:每条用例一条新总线、一个新进程。"""
+    from dbus_testing.engine import Engine, SessionManager
+    from dbus_testing.model import load_service
+
+    suite = _suite(
+        tmp_path,
+        """apiVersion: v1
+cases:
+  - name: a
+    call: {method: Echo, args: ["a"]}
+  - name: b
+    call: {method: Echo, args: ["b"]}
+""",
+        extra_service="isolation: per-case\n",
+    )
+    spec = load_service(suite / "service.yaml")
+    cases = Engine().compile(suite / "tests.yaml", spec)
+    manager = SessionManager(spec)
+    try:
+        manager.context_for(cases[0])
+        assert manager.session is not None and manager.session.bus is not None
+        assert manager.session.handle is not None
+        bus_a = manager.session.bus.address
+        pid_a = manager.session.handle.process.pid
+        manager.context_for(cases[1])
+        assert manager.session is not None and manager.session.bus is not None
+        assert manager.session.handle is not None
+        assert manager.session.bus.address != bus_a, "per-case 必须换总线"
+        assert manager.session.handle.process.pid != pid_a, "per-case 必须换进程"
+    finally:
+        manager.close()
+
+
+def test_restart_per_case_keeps_bus_restarts_process(tmp_path: Path) -> None:
+    """restart: per-case:总线/mock/沙箱复用,被测进程每条用例重启。"""
+    from dbus_testing.engine import Engine, SessionManager
+    from dbus_testing.model import load_service
+
+    suite = _suite(
+        tmp_path,
+        """apiVersion: v1
+cases:
+  - name: write-42
+    set-prop: {property: Counter, value: 42}
+  - name: expect-fresh
+    get-prop: {property: Counter}
+    expect: {value: 0}
+""",
+        extra_service="restart: per-case\n",
+    )
+    result = _run(suite)
+    assert [c.status for c in result.cases] == ["pass", "pass"], [
+        (c.name, c.status, c.detail) for c in result.cases
+    ]
+
+    spec = load_service(suite / "service.yaml")
+    cases = Engine().compile(suite / "tests.yaml", spec)
+    manager = SessionManager(spec)
+    try:
+        manager.context_for(cases[0])
+        assert manager.session is not None and manager.session.bus is not None
+        assert manager.session.handle is not None
+        bus_a = manager.session.bus.address
+        pid_a = manager.session.handle.process.pid
+        manager.context_for(cases[1])
+        assert manager.session is not None and manager.session.bus is not None
+        assert manager.session.handle is not None
+        assert manager.session.bus.address == bus_a, "restart 必须复用总线"
+        assert manager.session.handle.process.pid != pid_a, "restart 必须换进程"
+    finally:
+        manager.close()

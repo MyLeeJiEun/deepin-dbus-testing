@@ -166,6 +166,10 @@ class PrivateBus:
         """--keep-bus:保留总线与临时目录。"""
         self._keep = True
 
+    def discard(self) -> None:
+        """撤销 keep:per-case 重建中间会话时,旧总线必须真回收。"""
+        self._keep = False
+
     def _cleanup_dir(self) -> None:
         if self._dir is not None:
             shutil.rmtree(self._dir, ignore_errors=True)

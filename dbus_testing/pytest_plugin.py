@@ -12,20 +12,19 @@ from typing import Any
 import pytest
 
 from .core.diagnose import diagnose
-from .core.guard import AttachGuard
 from .engine import (
     SERVICE_FILENAME,
     TESTS_FILENAME,
     Engine,
     RunContext,
-    Session,
+    SessionManager,
     load_baseline,
 )
 from .errors import DbusTestingError
 from .model import Case, ServiceSpec, load_service
 from .results import CaseResult
 
-_SESSIONS: dict[Path, tuple[Session, RunContext]] = {}
+_MANAGERS: dict[Path, SessionManager] = {}
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -64,35 +63,28 @@ def _load_spec(service_yaml: Path, config: pytest.Config) -> ServiceSpec:
     return load_service(service_yaml, build_dir=_build_dir(config))
 
 
-def _session_for(service_yaml: Path, config: pytest.Config) -> tuple[Session, RunContext]:
-    """同一个 service.yaml 共用一条会话(默认 per-run 总线粒度)。"""
+def _manager_for(service_yaml: Path, config: pytest.Config) -> SessionManager:
+    """同一个 service.yaml 共用一个会话管理器;是否按用例重建由 isolation/restart 决定。"""
     key = service_yaml.resolve()
-    if key in _SESSIONS:
-        return _SESSIONS[key]
+    if key in _MANAGERS:
+        return _MANAGERS[key]
     spec = _load_spec(service_yaml, config)
-    keep = bool(config.getoption("--dbus-keep-bus"))
-    session = Session(spec, keep=keep)
-    session.start()
-    assert session.client is not None
-    ctx = RunContext(
-        spec=spec,
-        client=session.client,
-        guard=AttachGuard(spec),
-        mocks=session.mocks,
-        baseline=load_baseline(service_yaml.parent),
-        ignore=spec.ignore,
-        tests_dir=service_yaml.parent,
+    manager = SessionManager(
+        spec,
+        keep=bool(config.getoption("--dbus-keep-bus")),
         timeout_scale=float(config.getoption("--dbus-timeout-scale")),
-        handle=session.handle,
+        baseline=load_baseline(service_yaml.parent),
+        tests_dir=service_yaml.parent,
     )
-    _SESSIONS[key] = (session, ctx)
-    return session, ctx
+    manager.ensure()
+    _MANAGERS[key] = manager
+    return manager
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    for sess, _ctx in _SESSIONS.values():
-        sess.stop()
-    _SESSIONS.clear()
+    for manager in _MANAGERS.values():
+        manager.close()
+    _MANAGERS.clear()
 
 
 def pytest_collect_file(file_path: Path, parent: pytest.Collector) -> pytest.Collector | None:
@@ -127,9 +119,10 @@ class YamlCase(pytest.Item):
     def runtest(self) -> None:
         service_yaml = self.path.parent / SERVICE_FILENAME
         try:
-            _session, ctx = _session_for(service_yaml, self.config)
+            manager = _manager_for(service_yaml, self.config)
         except DbusTestingError as exc:
             raise CaseFailure(diagnose(exc).render()) from exc
+        ctx = manager.context_for(self.case)
         result = Engine().run_case(self.case, ctx)
         self._result = result
         if result.status == "skip":
@@ -171,16 +164,15 @@ def dbus_tests_dir(request: pytest.FixtureRequest) -> Path:
 
 @pytest.fixture(scope="session")
 def dbus_context(dbus_tests_dir: Path, pytestconfig: pytest.Config) -> RunContext:
-    _session, ctx = _session_for(dbus_tests_dir / SERVICE_FILENAME, pytestconfig)
-    return ctx
+    return _manager_for(dbus_tests_dir / SERVICE_FILENAME, pytestconfig).context
 
 
 @pytest.fixture(scope="session")
 def dbus_bus(dbus_tests_dir: Path, pytestconfig: pytest.Config) -> str:
-    session, _ctx = _session_for(dbus_tests_dir / SERVICE_FILENAME, pytestconfig)
     from .core.bus import BusType
 
-    return session.env[BusType.SESSION.env_name]
+    manager = _manager_for(dbus_tests_dir / SERVICE_FILENAME, pytestconfig)
+    return manager.ensure().env[BusType.SESSION.env_name]
 
 
 class ServiceProxy:
@@ -189,7 +181,11 @@ class ServiceProxy:
     def __init__(self, ctx: RunContext) -> None:
         self._ctx = ctx
         self.spec = ctx.spec
-        self.client = ctx.client
+
+    @property
+    def client(self) -> Any:
+        """始终返回当前会话的连接(isolation: per-case 下会话会被重建)。"""
+        return self._ctx.client
 
     def _target(self, member: str, *, interface: str | None = None, path: str | None = None) -> Any:
         from .model import Target

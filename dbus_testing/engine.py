@@ -79,9 +79,18 @@ class Session:
         self.handle: ServiceHandle | None = None
         self.client: BusClient | None = None
         self.env: dict[str, str] = {}
+        # restart_service 复用:主交互总线地址与注入被测进程的环境增量
+        self._address: str | None = None
+        self._overlay: dict[str, str] = {}
 
     def __enter__(self) -> Session:
-        self.start()
+        try:
+            self.start()
+        except BaseException:
+            # __enter__ 抛异常时 Python 不会调 __exit__,半成品(总线/mock/沙箱)
+            # 必须在这里自己回收;keep=True 时保留现场供 --keep-bus 排障。
+            self.stop()
+            raise
         return self
 
     def __exit__(
@@ -163,9 +172,16 @@ class Session:
 
         overlay = dict(bus_env)
         overlay.update(sandbox_env)
+        self._address = address
+        self._overlay = overlay
 
         # 3) 拉起被测进程并等待就绪
-        self.handle = self.launcher.launch(spec, address, overlay)
+        self._launch()
+
+    def _launch(self) -> None:
+        """拉起被测进程并等待就绪(restart_service 复用同一套总线/mock/沙箱)。"""
+        assert self._address is not None and self.client is not None
+        self.handle = self.launcher.launch(self.spec, self._address, self._overlay)
         try:
             self.launcher.wait_ready(self.handle, self.client)
         except (ProcessDied, ReadyTimeout):
@@ -174,12 +190,30 @@ class Session:
                 self.mocks.check_faithful(self.handle.output_tail(200))
             raise
 
-    def stop(self) -> None:
-        if self.handle is not None and not self.keep:
+    def restart_service(self) -> None:
+        """重启被测进程,总线/mock/沙箱原样复用(service.yaml 的 restart: per-case)。"""
+        if self.handle is None:
+            raise ConfigError(
+                f"{self.spec.source}: attach 模式下服务不由框架拉起,无法重启;"
+                f"请去掉 restart 或改用 mode: isolate"
+            )
+        self.handle.terminate()
+        self.handle = None
+        self._launch()
+
+    def stop(self, *, force: bool = False) -> None:
+        """回收会话;force=True 时忽略 keep(per-case 重建中间会话时用)。"""
+        if force:
+            if self.sandbox is not None:
+                self.sandbox.discard()
+            for bus in (self.system_bus, self.bus):
+                if bus is not None:
+                    bus.discard()
+        if self.handle is not None and (force or not self.keep):
             self.handle.terminate()
-        if self.client is not None and not self.keep:
+        if self.client is not None and (force or not self.keep):
             self.client.close()
-        if not self.keep:
+        if force or not self.keep:
             self.mocks.stop()
             if self.sandbox is not None:
                 self.sandbox.__exit__(None, None, None)
@@ -220,16 +254,127 @@ class Session:
 @dataclass
 class RunContext:
     spec: ServiceSpec
-    client: BusClient
+    manager: SessionManager
     guard: AttachGuard
-    mocks: MockDeps
     baseline: str
     ignore: IgnoreSpec
     tests_dir: Path
     timeout_scale: float = 1.0
-    handle: ServiceHandle | None = None
     live_xml: str = ""
     contract_deltas: list[Delta] = field(default_factory=list)
+
+    # client / mocks / handle 随 isolation: per-case 的会话重建而变化,
+    # 统一经 manager 取,任何持有者都不会拿到已关闭的旧连接。
+    @property
+    def client(self) -> BusClient:
+        assert self.manager.session is not None and self.manager.session.client is not None
+        return self.manager.session.client
+
+    @property
+    def mocks(self) -> MockDeps:
+        assert self.manager.session is not None
+        return self.manager.session.mocks
+
+    @property
+    def handle(self) -> ServiceHandle | None:
+        return self.manager.session.handle if self.manager.session is not None else None
+
+
+class SessionManager:
+    """按 isolation / restart 语义提供执行环境,并持有唯一的 RunContext。
+
+    - `isolation: per-run`(默认)整套用例共享一个会话;
+    - `isolation: per-case`       每条用例重建会话(总线 + mock + 沙箱 + 进程);
+    - `restart:   per-case`       复用会话,只重启被测进程。
+
+    `isolation: per-case` 已隐含重启进程,此时 `restart` 不再产生额外动作。
+    """
+
+    def __init__(
+        self,
+        spec: ServiceSpec,
+        *,
+        keep: bool = False,
+        timeout_scale: float = 1.0,
+        baseline: str = "",
+        tests_dir: Path = Path("."),
+    ) -> None:
+        self.spec = spec
+        self.keep = keep
+        self.session: Session | None = None
+        self.context = RunContext(
+            spec=spec,
+            manager=self,
+            guard=AttachGuard(spec),
+            baseline=baseline,
+            ignore=spec.ignore,
+            tests_dir=tests_dir,
+            timeout_scale=timeout_scale,
+        )
+        self._case: Case | None = None
+
+    # ------------------------------------------------------------------ 生命周期
+
+    def __enter__(self) -> SessionManager:
+        self.ensure()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def ensure(self) -> Session:
+        if self.session is None:
+            session = Session(self.spec, keep=self.keep)
+            try:
+                session.start()
+            except BaseException:
+                # 半成品自己回收;keep=True 时保留现场供排障
+                session.stop()
+                raise
+            self.session = session
+        return self.session
+
+    def context_for(self, case: Case) -> RunContext:
+        """取该用例的执行环境,按 isolation / restart 决定是否重建。"""
+        self.ensure()
+        if self._case is not None and self._case is not case:
+            if self.spec.isolation == "per-case":
+                self._recycle()
+            elif self.spec.restart == "per-case":
+                assert self.session is not None
+                self.session.restart_service()
+        self._case = case
+        return self.context
+
+    def _recycle(self) -> None:
+        """丢弃当前会话并重建(per-case):旧会话必须真回收,不留孤儿总线。"""
+        assert self.session is not None
+        self.session.stop(force=True)
+        self.session = Session(self.spec, keep=self.keep)
+        self.session.start()
+
+    def close(self) -> None:
+        if self.session is not None:
+            self.session.stop()
+            self.session = None
+
+    def env_fingerprint(self) -> dict[str, str]:
+        return self.session.env_fingerprint() if self.session is not None else {}
+
+    @property
+    def client(self) -> BusClient:
+        assert self.session is not None and self.session.client is not None
+        return self.session.client
+
+    @property
+    def mocks(self) -> MockDeps:
+        assert self.session is not None
+        return self.session.mocks
 
 
 # --------------------------------------------------------------------------- 断言
@@ -478,10 +623,15 @@ class Engine:
         started = time.monotonic()
         result = RunResult()
         for case in cases:
+            # 每条用例先取环境:isolation/restart 为 per-case 时会在此重建会话
+            ctx = ctx.manager.context_for(case)
             result.cases.append(self.run_case(case, ctx))
+            for delta in ctx.contract_deltas:
+                if delta not in result.contract:
+                    result.contract.append(delta)
+            if ctx.live_xml:
+                result.live_xml = ctx.live_xml
         result.elapsed = time.monotonic() - started
-        result.contract = list(ctx.contract_deltas)
-        result.live_xml = ctx.live_xml
         return result
 
 
@@ -632,30 +782,19 @@ def run_suite(
         else None
     )
 
-    with Session(spec, keep=keep) as session:
-        assert session.client is not None
-        ctx = RunContext(
-            spec=spec,
-            client=session.client,
-            guard=AttachGuard(spec),
-            mocks=session.mocks,
-            baseline=baseline,
-            ignore=spec.ignore,
-            tests_dir=tests_dir,
-            timeout_scale=timeout_scale,
-            handle=session.handle,
-        )
-        result = engine.run(cases, ctx)
-        if not ctx.live_xml:
+    with SessionManager(
+        spec, keep=keep, timeout_scale=timeout_scale, baseline=baseline, tests_dir=tests_dir
+    ) as manager:
+        result = engine.run(cases, manager.context)
+        if not result.live_xml:
             # 补一次快照供覆盖矩阵使用;服务此时可能已被前面的用例弄成不可用
             # (例如刚测过一个会阻塞的方法),快照失败不应把整轮判为错误。
             try:
-                tree = snapshot(session.client, spec.services, spec.ignore)
-                ctx.live_xml = normalize_tree(tree, spec.ignore)
-                result.live_xml = ctx.live_xml
+                tree = snapshot(manager.client, spec.services, spec.ignore)
+                result.live_xml = normalize_tree(tree, spec.ignore)
             except DbusTestingError as exc:
                 log.warning("收尾快照失败(不影响用例结果): %s", exc)
-        result.env = session.env_fingerprint()
+        result.env = manager.env_fingerprint()
 
     if include_static:
         if src_xml is None:

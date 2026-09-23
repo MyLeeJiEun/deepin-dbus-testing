@@ -60,6 +60,10 @@ class Sandbox:
     def keep(self) -> None:
         self._keep = True
 
+    def discard(self) -> None:
+        """撤销 keep:per-case 重建中间会话时,旧沙箱目录必须真删除。"""
+        self._keep = False
+
     @property
     def home(self) -> Path | None:
         return self._dir
