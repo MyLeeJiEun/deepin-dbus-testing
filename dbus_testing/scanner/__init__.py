@@ -6,6 +6,7 @@
 """
 
 from .diff import diff
+from .introspect import snapshot
 from .normalize import normalize_interface_xml, normalize_tree, parse_members
 from .srcxml import collect_src_xml, src_baseline_xml, static_diff
 
@@ -15,6 +16,7 @@ __all__ = [
     "normalize_interface_xml",
     "normalize_tree",
     "parse_members",
+    "snapshot",
     "src_baseline_xml",
     "static_diff",
 ]

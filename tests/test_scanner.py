@@ -12,6 +12,7 @@ from dbus_testing.scanner import (
     normalize_interface_xml,
     normalize_tree,
     parse_members,
+    snapshot,
     src_baseline_xml,
     static_diff,
 )
@@ -169,3 +170,56 @@ def test_scan_is_byte_identical_across_runs(tmp_path: Path) -> None:
     assert code == 0, err
     second = (suite / "contract.xml").read_bytes()
     assert first == second, "两次 scan 的基线不一致 → 规范化不稳定"
+
+
+def test_snapshot_merges_shared_path_across_names(tmp_path: Path) -> None:
+    """多名字共享路径:第二个名字在同路径导出的接口必须进基线(R5 回归)。"""
+    from dbus_testing.engine import Session
+    from dbus_testing.model import load_service
+    from tests.conftest import make_suite
+
+    suite = make_suite(
+        tmp_path, "fx_twin", services=("org.example.TwinA", "org.example.TwinB")
+    )
+    spec = load_service(suite / "service.yaml")
+    with Session(spec) as session:
+        assert session.client is not None
+        contract = normalize_tree(
+            snapshot(session.client, spec.services, spec.ignore), spec.ignore
+        )
+    assert 'interface name="org.example.TwinA"' in contract
+    assert 'interface name="org.example.TwinB"' in contract
+
+
+def test_contract_gate_covers_shared_path_names(tmp_path: Path) -> None:
+    """共享路径名字的接口漂移必须被门禁发现(修复前是盲区,静默放行)。"""
+    from dbus_testing.engine import Session, run_suite
+    from dbus_testing.model import load_service
+    from tests.conftest import make_suite
+
+    suite = make_suite(
+        tmp_path,
+        "fx_twin",
+        services=("org.example.TwinA", "org.example.TwinB"),
+        cases="apiVersion: v1\ncases:\n  - name: contract\n    check-contract: true\n",
+    )
+    spec = load_service(suite / "service.yaml")
+    with Session(spec) as session:
+        assert session.client is not None
+        baseline = normalize_tree(
+            snapshot(session.client, spec.services, spec.ignore), spec.ignore
+        )
+    (suite / "contract.xml").write_text(baseline, encoding="utf-8")
+    result = run_suite(suite, include_static=False).result
+    assert result.cases[0].status == "pass", result.cases[0].detail
+
+    # 基线里删掉 TwinB 的方法 → 运行时与基线必须报出漂移
+    broken = baseline.replace('<method name="WhoB">', '<method name="WhoBX">')
+    (suite / "contract.xml").write_text(broken, encoding="utf-8")
+    result2 = run_suite(suite, include_static=False).result
+    case = result2.cases[0]
+    assert case.status == "fail" and case.code == "E_CONTRACT_DRIFT", (
+        case.status,
+        case.detail,
+    )
+    assert any(d.member == "WhoB" for d in result2.contract)
