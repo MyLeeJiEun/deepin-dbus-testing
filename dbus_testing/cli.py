@@ -47,7 +47,7 @@ from .report import write_html, write_json, write_junit
 from .results import CaseResult, RunResult
 from .scanner.diff import diff
 from .scanner.draft import ProbeResult, draft_service, draft_tests
-from .scanner.introspect import snapshot
+from .scanner.introspect import merge_docs, snapshot
 from .scanner.normalize import normalize_tree
 from .scanner.srcxml import src_baseline_xml, static_diff
 
@@ -182,12 +182,20 @@ def _probe_from_binary(
     notes: list[str] = []
     last_output = ""
     for extra in attempts:
-        with PrivateBus(BusType.SESSION) as bus:
+        with (
+            PrivateBus(BusType.SESSION) as bus,
+            PrivateBus(BusType.SYSTEM) as sysbus,
+        ):
+            # 双总线都预置并注入地址:被测二进制无论连 session 还是 system 总线,
+            # 都不能落到真实总线上去抢名字/调真实服务(R4)。
             client = BusClient(bus.address)
+            sysclient = BusClient(sysbus.address)
             before = set(client.list_acquired_names())
+            sys_before = set(sysclient.list_acquired_names())
             sandbox = Sandbox(SandboxSpec(home="tmp", env=extra))
             sandbox_env = sandbox.__enter__()
             overlay = dict(bus.env)
+            overlay.update(sysbus.env)
             overlay.update(sandbox_env)
             spec = ServiceSpec(
                 api_version="v1",
@@ -199,40 +207,62 @@ def _probe_from_binary(
             )
             handle = Launcher().launch(spec, bus.address, overlay)
             deadline = time.monotonic() + timeout
-            found: list[str] = []
+            found_session: set[str] = set()
+            found_system: set[str] = set()
             while time.monotonic() < deadline:
                 if not handle.is_alive():
                     break
-                now = set(client.list_acquired_names())
-                new = sorted(n for n in now - before if n != "org.freedesktop.DBus")
-                if new:
+                session_new = (set(client.list_acquired_names()) - before) - {
+                    "org.freedesktop.DBus"
+                }
+                system_new = (set(sysclient.list_acquired_names()) - sys_before) - {
+                    "org.freedesktop.DBus"
+                }
+                if session_new or system_new:
                     time.sleep(0.3)  # 再等一拍,捕获同进程注册的其它名字
-                    now = set(client.list_acquired_names())
-                    found = sorted(n for n in now - before if n != "org.freedesktop.DBus")
+                    found_session = (
+                        set(client.list_acquired_names()) - before
+                    ) - {"org.freedesktop.DBus"}
+                    found_system = (
+                        set(sysclient.list_acquired_names()) - sys_before
+                    ) - {"org.freedesktop.DBus"}
                     break
                 time.sleep(0.1)
 
-            if found:
-                tree = snapshot(client, tuple(found), IgnoreSpec())
+            if found_session or found_system:
+                tree = snapshot(client, tuple(sorted(found_session)), IgnoreSpec())
+                for path, xml in snapshot(
+                    sysclient, tuple(sorted(found_system)), IgnoreSpec()
+                ).items():
+                    # 双总线快照合并:同一进程可能在两条总线各持连接与同名路径
+                    tree[path] = merge_docs(tree[path], xml) if path in tree else xml
                 if extra:
                     notes.append(f"自动补充环境变量生效: {extra}")
+                if found_system:
+                    notes.append(
+                        f"名字注册在 system 总线上: {', '.join(sorted(found_system))};"
+                        f"已按 system-bus: true 生成草稿"
+                    )
                 probe = ProbeResult(
-                    services=tuple(found),
+                    services=tuple(sorted(found_session | found_system)),
                     binary=binary,
                     binary_search=_binary_candidates(binary, build_dir),
                     env=dict(extra),
                     notes=notes,
                     args=args,
+                    system_bus=bool(found_system),
                 )
                 handle.terminate()
                 sandbox.__exit__(None, None, None)
                 client.close()
+                sysclient.close()
                 return probe, tree
 
             last_output = handle.output_tail(20)
             handle.terminate()
             sandbox.__exit__(None, None, None)
             client.close()
+            sysclient.close()
 
         lowered = last_output.lower()
         if not any(k in lowered for k in DISPLAY_KEYS):

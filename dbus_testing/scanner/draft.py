@@ -49,6 +49,8 @@ class ProbeResult:
     module: str | None = None
     plugin: str | None = None
     args: tuple[str, ...] = ()
+    # 探测到名字注册在(私有)system 总线上 → 草稿输出 system-bus: true
+    system_bus: bool = False
 
 
 def _split_args(sig: str) -> list[str]:
@@ -172,6 +174,8 @@ def draft_service(probe: ProbeResult) -> str:
     lines.append(f"process: {probe.binary.name if probe.binary else primary}")
     lines.append(f"mode: {probe.mode}")
     lines.append(f"kind: {kind}")
+    if probe.system_bus:
+        lines.append("system-bus: true")
     lines.append("")
     lines.append("services:")
     for svc in probe.services:

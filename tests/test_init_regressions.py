@@ -263,3 +263,46 @@ def test_init_still_accepts_repeated_arg_option() -> None:
     )
     merged = tuple(ns.arg or ()) + tuple(ns.passthrough or ())
     assert merged == ("--loglevel", "debug", "-i")
+
+
+def test_draft_service_emits_system_bus_flag() -> None:
+    """探测到名字注册在 system 总线上 → 草稿必须输出 system-bus: true。"""
+    probe = ProbeResult(services=("org.example.Sys",), system_bus=True)
+    assert "system-bus: true" in draft_service(probe)
+    assert "system-bus:" not in draft_service(ProbeResult(services=("org.example.S",)))
+
+
+def test_init_detects_system_bus_service(tmp_path: Path) -> None:
+    """端到端:连 system 总线的服务跑 init,必须探测到并生成可跑的配置(R4 回归)。
+
+    修复前 init 只起私有 session 总线、不注入 DBUS_SYSTEM_BUS_ADDRESS,
+    被测二进制会回落连上真实系统总线,探测永远失败且无提示。
+    """
+    import os
+
+    saved = {k: os.environ.pop(k, None) for k in list(os.environ) if k.startswith("DBUS_")}
+    try:
+        code, _out, _err = run_cli(
+            [
+                "init",
+                "--binary",
+                str(fixture_path("fx_sysecho")),
+                "--out",
+                str(tmp_path / "dbus"),
+                "--ready-timeout",
+                "10",
+            ]
+        )
+    finally:
+        for key, value in saved.items():
+            if value is not None:
+                os.environ[key] = value
+    assert code == 0
+    spec = load_service(tmp_path / "dbus" / "service.yaml")
+    assert spec.system_bus, (tmp_path / "dbus" / "service.yaml").read_text()
+    (tmp_path / "dbus" / "tests.yaml").write_text(
+        "apiVersion: v1\ncases:\n  - name: contract\n    check-contract: true\n",
+        encoding="utf-8",
+    )
+    result = run_suite(tmp_path / "dbus", include_static=False).result
+    assert result.ok, [(c.name, c.status, c.detail) for c in result.cases]

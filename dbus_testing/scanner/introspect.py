@@ -55,17 +55,18 @@ def snapshot(
         decide = make_decider(ignore)
         for path, xml in client.walk(service, root, decide=decide):  # type: ignore[arg-type]
             if path in tree:
-                tree[path] = _merge_docs(tree[path], xml)
+                tree[path] = merge_docs(tree[path], xml)
             else:
                 tree[path] = xml
     return tree
 
 
-def _merge_docs(a: str, b: str) -> str:
+def merge_docs(a: str, b: str) -> str:
     """合并同一路径的两份 introspection 文档:接口按名取并集。
 
     内容一致的同名接口只留一份;同名不同内容属服务端异常,保留首个并告警
     (与 srcxml 收集源码声明时的"同一接口保留首个命中"同一语义)。
+    init 对双总线探测合并两棵快照树时也用它。
     """
     by_name: dict[str, ET.Element] = {}
     for doc in (a, b):
