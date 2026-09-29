@@ -801,6 +801,43 @@ def run_suite(
             result.static_skipped = "仓内未找到源码声明 XML(src-xml-globs 无命中)"
         elif baseline:
             result.static_contract = static_diff(src_xml, baseline)
+            if result.static_contract:
+                # 漂移必须置失败,不能只写进报告(R7):退出码是 CI 门禁唯一认的信号
+                result.cases.append(
+                    synthetic_case(
+                        "contract-static",
+                        "fail",
+                        code="E_CONTRACT_DRIFT",
+                        summary=f"源码声明与 contract.xml 有 {len(result.static_contract)} 处差异",
+                        detail="\n".join(f"  {d.render()}" for d in result.static_contract),
+                        hint="接口有意变更 → 更新 contract.xml;否则检查源码声明 XML 是否漏改",
+                    )
+                )
+                log.warning(
+                    "静态契约校验发现 %d 处漂移,已计为失败(与 check --static 同语义)",
+                    len(result.static_contract),
+                )
 
     result.coverage = build_coverage(baseline, result.live_xml, src_xml, cases)
     return SuiteOutcome(result=result, spec=spec, cases=cases)
+
+
+def synthetic_case(
+    name: str,
+    status: str,
+    *,
+    code: str = "",
+    summary: str = "",
+    detail: str = "",
+    hint: str = "",
+) -> CaseResult:
+    """为无用例但需在 CI 里可见的检查(如契约静态比对)合成一个 testcase。"""
+    case = Case(name=name, steps=())
+    return CaseResult(
+        case=case,
+        status=status,  # type: ignore[arg-type]
+        code=code or None,
+        summary=summary,
+        detail=detail,
+        hint=hint,
+    )

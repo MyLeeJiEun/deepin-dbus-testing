@@ -406,3 +406,28 @@ cases:
         assert manager.session.handle.process.pid != pid_a, "restart 必须换进程"
     finally:
         manager.close()
+
+
+def test_run_fails_on_static_contract_drift(tmp_path: Path) -> None:
+    """run 默认含静态契约校验:漂移必须置失败,不能只写进报告(R7 回归)。"""
+    suite = _suite(
+        tmp_path, "apiVersion: v1\ncases:\n  - name: contract\n    check-contract: true\n"
+    )
+    result = _run(suite)
+    assert result.cases[0].status == "pass", result.cases[0].detail
+    (suite / "contract.xml").write_text(result.live_xml, encoding="utf-8")
+
+    # 仓内源码声明与基线不一致 → include_static=True(CLI run 默认)必须置失败
+    (suite / "xml").mkdir()
+    (suite / "xml" / "declared.xml").write_text(
+        '<node><interface name="org.example.FxEcho.Ghost">'
+        '<method name="Nope"><arg direction="out" type="s"/></method>'
+        "</interface></node>",
+        encoding="utf-8",
+    )
+    drifted = run_suite(suite, include_static=True).result
+    assert not drifted.ok
+    static = next(c for c in drifted.cases if c.name == "contract-static")
+    assert static.status == "fail" and static.code == "E_CONTRACT_DRIFT"
+    # 显式关掉静态校验时不判失败
+    assert run_suite(suite, include_static=False).result.ok

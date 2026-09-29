@@ -316,3 +316,29 @@ def test_pytest_plugin_reports_failure_detail(tmp_path: Path) -> None:
     combined = proc.stdout + proc.stderr
     assert "1 failed" in combined, combined[-3000:]
     assert "返回值不符" in combined
+
+
+def test_scan_emit_refuses_empty_snapshot(tmp_path: Path) -> None:
+    """空快照不得覆盖有效基线(R6 回归);显式 --force-empty 才允许。"""
+    from dbus_testing.core.bus import BusType, PrivateBus
+
+    suite = make_suite(tmp_path, "fx_echo", services=(ECHO,), mode="attach")
+    good = '<node>\n  <interface name="org.example.Keep"/>\n</node>\n'
+    (suite / "contract.xml").write_text(good, encoding="utf-8")
+
+    saved = os.environ.get(BusType.SESSION.env_name)
+    with PrivateBus(BusType.SESSION) as bus:  # 空总线:配置的服务根本不在
+        os.environ[BusType.SESSION.env_name] = bus.address
+        try:
+            code, _out, err = run_cli(["scan", str(suite), "--emit"])
+            assert code == EXIT_CONFIG, (code, err)
+            assert "拒绝用空契约" in err
+            assert (suite / "contract.xml").read_text() == good, "基线不得被覆盖"
+            code2, _o2, _e2 = run_cli(["scan", str(suite), "--emit", "--force-empty"])
+        finally:
+            if saved is None:
+                os.environ.pop(BusType.SESSION.env_name, None)
+            else:
+                os.environ[BusType.SESSION.env_name] = saved
+    assert code2 == EXIT_OK
+    assert (suite / "contract.xml").read_text() == "<node>\n</node>\n"

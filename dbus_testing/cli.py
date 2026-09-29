@@ -32,6 +32,7 @@ from .engine import (
     build_coverage,
     load_baseline,
     run_suite,
+    synthetic_case,
 )
 from .errors import (
     EXIT_FAILED,
@@ -42,9 +43,9 @@ from .errors import (
     DbusTestingError,
     ProcessDied,
 )
-from .model import Case, IgnoreSpec, SandboxSpec, load_service, service_name_to_path
+from .model import IgnoreSpec, SandboxSpec, load_service, service_name_to_path
 from .report import write_html, write_json, write_junit
-from .results import CaseResult, RunResult
+from .results import RunResult
 from .scanner.diff import diff
 from .scanner.draft import ProbeResult, draft_service, draft_tests
 from .scanner.introspect import merge_docs, snapshot
@@ -129,20 +130,6 @@ def _write_reports(result: RunResult, out: Path | None) -> None:
     if result.live_xml:
         (out / LIVE_CONTRACT_FILENAME).write_text(result.live_xml, encoding="utf-8")
     print(f"  报告已产出: {out}")
-
-
-def _synthetic_case(name: str, status: str, *, code: str = "", summary: str = "", detail: str = "",
-                    hint: str = "") -> CaseResult:
-    """为无用例但需在 CI 里可见的检查(如 check)合成一个 testcase。"""
-    case = Case(name=name, steps=())
-    return CaseResult(
-        case=case,
-        status=status,  # type: ignore[arg-type]
-        code=code or None,
-        summary=summary,
-        detail=detail,
-        hint=hint,
-    )
 
 
 def _keep_hint(session: Session) -> None:
@@ -379,6 +366,20 @@ def cmd_scan(ns: argparse.Namespace) -> int:
         contract = normalize_tree(tree, spec.ignore)
         if ns.keep_bus:
             _keep_hint(session)
+    empty = not tree or "<interface" not in contract
+    if empty:
+        print(
+            "警告:运行时快照为空(0 个对象/0 个接口)——服务未注册任何名字"
+            "或接错了总线",
+            file=sys.stderr,
+        )
+    if ns.emit and empty and not ns.force_empty:
+        # 空契约会让之后所有契约比对永远全绿(R6):拒绝静默覆盖有效基线
+        raise ConfigError(
+            f"运行时快照为空,拒绝用空契约覆盖 {tests_dir / CONTRACT_FILENAME}。"
+            f"请先排查服务为何没起来(必要时 --keep-bus + busctl 排查),"
+            f"确认要清空基线请显式加 --force-empty"
+        )
     print(f"运行时快照:{len(tree)} 个对象,{contract.count('<interface')} 个接口声明")
     if ns.emit:
         target = tests_dir / CONTRACT_FILENAME
@@ -412,7 +413,7 @@ def cmd_check(ns: argparse.Namespace) -> int:
                 f"仓内未找到源码声明 XML(src-xml-globs={list(spec.src_xml_globs)})"
             )
             result.cases.append(
-                _synthetic_case(
+                synthetic_case(
                     "contract-static", "skip", summary=result.static_skipped
                 )
             )
@@ -423,7 +424,7 @@ def cmd_check(ns: argparse.Namespace) -> int:
             if deltas:
                 detail = "\n".join(f"  {d.render()}" for d in deltas)
                 result.cases.append(
-                    _synthetic_case(
+                    synthetic_case(
                         "contract-static",
                         "fail",
                         code="E_CONTRACT_DRIFT",
@@ -437,7 +438,7 @@ def cmd_check(ns: argparse.Namespace) -> int:
                 print("   removed=源码有而基线缺,added=基线有而源码缺)")
                 print(detail)
             else:
-                result.cases.append(_synthetic_case("contract-static", "pass"))
+                result.cases.append(synthetic_case("contract-static", "pass"))
                 print("PASS 源码声明与 contract.xml 一致")
         result.coverage = build_coverage(baseline, "", src, [])
     else:
@@ -452,7 +453,7 @@ def cmd_check(ns: argparse.Namespace) -> int:
             if deltas:
                 detail = "\n".join(f"  {d.render()}" for d in deltas)
                 result.cases.append(
-                    _synthetic_case(
+                    synthetic_case(
                         "contract-live",
                         "fail",
                         code="E_CONTRACT_DRIFT",
@@ -464,7 +465,7 @@ def cmd_check(ns: argparse.Namespace) -> int:
                 print(f"FAIL 运行时接口与基线有 {len(deltas)} 处差异:")
                 print(detail)
             else:
-                result.cases.append(_synthetic_case("contract-live", "pass"))
+                result.cases.append(synthetic_case("contract-live", "pass"))
                 print("PASS 运行时接口与 contract.xml 一致")
             if ns.keep_bus:
                 _keep_hint(session)
@@ -535,6 +536,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan = sub.add_parser("scan", parents=[common], help="运行时 introspect 并生成 contract.xml")
     p_scan.add_argument("dir", help="tests/dbus 目录")
     p_scan.add_argument("--emit", action="store_true", help="写入 contract.xml(否则打印到 stdout)")
+    p_scan.add_argument(
+        "--force-empty",
+        action="store_true",
+        help="快照为空时仍允许 --emit 覆盖(默认拒绝,防止清空有效基线)",
+    )
     p_scan.set_defaults(func=cmd_scan)
 
     p_check = sub.add_parser("check", parents=[common], help="契约校验")
