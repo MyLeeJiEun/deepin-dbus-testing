@@ -427,6 +427,8 @@ def cmd_check(ns: argparse.Namespace) -> int:
                     )
                 )
                 print(f"FAIL 静态契约校验被跳过(--strict):{result.static_skipped}")
+                # strict 下这是"失败"而非"跳过",别让摘要再报一行跳过
+                result.static_skipped = None
             else:
                 result.cases.append(
                     synthetic_case(

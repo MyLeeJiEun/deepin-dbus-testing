@@ -839,6 +839,8 @@ def run_suite(
                         hint="在 service.yaml 补 src-xml-globs 指向源码声明 XML,或去掉 --strict",
                     )
                 )
+                # strict 下这是"失败"而非"跳过":清掉标记,免得摘要再报一行跳过
+                result.static_skipped = None
         elif baseline:
             result.static_contract = static_diff(src_xml, baseline)
             if result.static_contract:
