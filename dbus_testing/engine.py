@@ -647,8 +647,13 @@ def build_coverage(
     runtime_xml: str,
     src_xml: str | None,
     cases: list[Case],
+    results: list[CaseResult] | None = None,
 ) -> CoverageMatrix:
-    """声明覆盖(源码/基线/运行时三方一致性)+ 执行覆盖(被哪些用例调用过)。"""
+    """声明覆盖(源码/基线/运行时三方一致性)+ 执行覆盖(被哪些用例成功调用过)。
+
+    `results` 提供执行结果时,执行覆盖只统计 `ok` 的步骤——失败与跳过的调用
+    不能给覆盖率凑数(R2);未提供时(check 路径)不产出执行覆盖。
+    """
     matrix = CoverageMatrix()
     base = parse_members(baseline_xml) if baseline_xml else {}
     live = parse_members(runtime_xml) if runtime_xml else {}
@@ -683,7 +688,20 @@ def build_coverage(
                 )
             )
 
-    # 执行覆盖:从用例的 Target 反查
+    # 执行覆盖:按 Target 反查。矩阵条目的建立仍看全部用例(报告里要能看到
+    # "配置了但没成功执行"的成员),但 executed_by 只统计 ok 的步骤。
+    ok_targets: dict[tuple[str, str], list[str]] = {}
+    if results is not None:
+        for case_result in results:
+            for step_result in case_result.steps:
+                target = step_result.step.target
+                if step_result.ok and target is not None:
+                    names = ok_targets.setdefault(
+                        (target.interface, target.member), []
+                    )
+                    if case_result.name not in names:
+                        names.append(case_result.name)
+
     for case in cases:
         for step in case.steps:
             if step.target is None:
@@ -705,8 +723,9 @@ def build_coverage(
                     declared="unknown",
                 )
                 matrix.add(cov)
-            if case.name not in cov.executed_by:
-                cov.executed_by.append(case.name)
+            if case.name in ok_targets.get((step.target.interface, step.target.member), []):
+                if case.name not in cov.executed_by:
+                    cov.executed_by.append(case.name)
     return matrix
 
 
@@ -818,7 +837,7 @@ def run_suite(
                     len(result.static_contract),
                 )
 
-    result.coverage = build_coverage(baseline, result.live_xml, src_xml, cases)
+    result.coverage = build_coverage(baseline, result.live_xml, src_xml, cases, result.cases)
     return SuiteOutcome(result=result, spec=spec, cases=cases)
 
 

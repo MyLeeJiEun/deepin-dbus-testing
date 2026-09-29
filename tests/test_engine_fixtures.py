@@ -431,3 +431,33 @@ def test_run_fails_on_static_contract_drift(tmp_path: Path) -> None:
     assert static.status == "fail" and static.code == "E_CONTRACT_DRIFT"
     # 显式关掉静态校验时不判失败
     assert run_suite(suite, include_static=False).result.ok
+
+
+def test_coverage_excludes_failed_and_skipped(tmp_path: Path) -> None:
+    """执行覆盖只统计成功的调用;失败与跳过不得凑数(R2 回归)。"""
+    suite = _suite(
+        tmp_path,
+        """apiVersion: v1
+cases:
+  - name: failing-echo
+    call: {method: Echo, args: ["x"]}
+    expect: {value: "y"}
+  - name: skipped-echo
+    skip: 等待上游修复
+    call: {method: Echo, args: ["z"]}
+    expect: {value: "z"}
+  - name: healthy-echo
+    call: {method: Echo, args: ["ok"]}
+    expect: {value: "ok"}
+""",
+    )
+    result = _run(suite)
+    assert [(c.name, c.status) for c in result.cases] == [
+        ("failing-echo", "fail"),
+        ("skipped-echo", "skip"),
+        ("healthy-echo", "pass"),
+    ]
+    cov = result.coverage.get(ECHO, "Echo")
+    assert cov.executed_by == ["healthy-echo"], cov.executed_by
+    # 预期错误也算成功执行:该成员确实被调到且行为符合预期
+    boom = result.coverage.get(ECHO, "Boom")
