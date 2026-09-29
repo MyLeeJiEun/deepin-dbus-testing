@@ -12,7 +12,7 @@ from .model import Case, Step
 
 CaseStatus = Literal["pass", "fail", "error", "config-error", "skip"]
 DeclaredStatus = Literal[
-    "ok", "only-src", "only-baseline", "only-runtime", "mismatch", "no-src", "unknown"
+    "ok", "only-src", "only-baseline", "only-runtime", "mismatch", "unknown"
 ]
 
 
@@ -65,7 +65,7 @@ class CaseResult:
 @dataclass(frozen=True)
 class Delta:
     kind: Literal["added", "removed", "changed"]
-    scope: Literal["interface", "method", "signal", "property", "arg", "path"]
+    scope: Literal["interface", "method", "signal", "property", "path"]
     path: str
     interface: str
     member: str | None = None

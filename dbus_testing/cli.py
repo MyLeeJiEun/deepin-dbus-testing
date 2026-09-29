@@ -13,8 +13,10 @@ import argparse
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -500,6 +502,41 @@ def cmd_run(ns: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- 解析器
 
 
+def cmd_reap(ns: argparse.Namespace) -> int:
+    """回收遗留的私有测试总线与沙箱目录(人工触发,不会自动执行)。"""
+    killed: list[int] = []
+    denied: list[int] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes().decode("utf-8", "replace")
+        except OSError:
+            continue
+        if "dbus-daemon" not in cmdline or "dbus-testing-" not in cmdline:
+            continue
+        pid = int(entry.name)
+        try:
+            os.kill(pid, signal.SIGTERM)
+            killed.append(pid)
+        except PermissionError:
+            denied.append(pid)
+        except ProcessLookupError:
+            pass
+    if killed:
+        time.sleep(0.3)  # 给 daemon 一点退出时间再清目录
+    tmp = Path(tempfile.gettempdir())
+    targets = [d for d in tmp.glob("dbus-testing-*") if d.is_dir()]
+    for directory in targets:
+        shutil.rmtree(directory, ignore_errors=True)
+    remaining = sum(1 for _ in tmp.glob("dbus-testing-*"))
+    print(
+        f"已回收总线 {len(killed)} 条、清理目录 {len(targets) - remaining} 个"
+        + (f",无权限跳过 {len(denied)} 条" if denied else "")
+    )
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dbus-testing",
@@ -559,6 +596,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--shell", action="store_true", help="跑完进入带总线环境变量的调试 shell")
     p_run.add_argument("--no-static", action="store_true", help="跳过源码声明比对")
     p_run.set_defaults(func=cmd_run)
+
+    p_reap = sub.add_parser("reap", help="回收遗留的私有测试总线与沙箱目录")
+    p_reap.set_defaults(func=cmd_reap)
 
     return parser
 

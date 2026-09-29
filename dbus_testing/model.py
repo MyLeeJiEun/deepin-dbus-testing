@@ -516,6 +516,7 @@ class Step:
     timeout: float | None = None
     expect: Expect = field(default_factory=Expect)
     signal: str | None = None
+    index: int = 0  # wait-signal:取第 N 次发射(0 起),默认首条
     mock_template: str | None = None
     mock_method: str | None = None
     line: int = 0
@@ -625,6 +626,11 @@ def _parse_step(entry: dict[str, Any], spec: ServiceSpec) -> Step:
             _pop(body, "path", None), "path"
         )
         interface = _opt_str(_pop(body, "interface", None), "interface") or service
+        index_raw = _pop(body, "index", None)
+        if index_raw is not None and (
+            isinstance(index_raw, bool) or not isinstance(index_raw, int) or index_raw < 0
+        ):
+            raise ConfigError("wait-signal.index 必须是非负整数")
         _ensure_empty(body, "wait-signal")
         _ensure_empty(entry, f"tests.yaml:{line} 步骤")
         if path is None:
@@ -645,6 +651,7 @@ def _parse_step(entry: dict[str, Any], spec: ServiceSpec) -> Step:
             signal=str(name),
             timeout=eff_timeout,
             expect=expect,
+            index=index_raw or 0,
             line=line,
         )
 

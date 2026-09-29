@@ -7,6 +7,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -342,3 +344,44 @@ def test_scan_emit_refuses_empty_snapshot(tmp_path: Path) -> None:
                 os.environ[BusType.SESSION.env_name] = saved
     assert code2 == EXIT_OK
     assert (suite / "contract.xml").read_text() == "<node>\n</node>\n"
+
+
+def test_reap_removes_leftover_private_buses(tmp_path: Path) -> None:
+    """reap 子命令:杀掉遗留的私有测试总线并清掉 /tmp 下的框架目录(C4)。"""
+    from dbus_testing.core.bus import BusType, PrivateBus
+
+    bus = PrivateBus(BusType.SESSION)
+    bus.start()
+    assert bus.pid is not None
+    leftover = Path(tempfile.gettempdir()) / "dbus-testing-reapcheck"
+    leftover.mkdir()
+    (leftover / "bus.conf").write_text("x", encoding="utf-8")
+
+    code, _out, _err = run_cli(["reap"])
+
+    assert code == EXIT_OK
+    assert not leftover.exists()
+    # daemon 收到 SIGTERM 后异步退出,轮询确认
+    for _ in range(20):
+        if not Path(f"/proc/{bus.pid}").exists():
+            break
+        time.sleep(0.1)
+    assert not Path(f"/proc/{bus.pid}").exists(), "遗留总线未被回收"
+
+
+def test_escape_hatch_fixture_resolves_suite_dir(tmp_path: Path) -> None:
+    """`pytest <目录>` 时逃生舱 fixture 必须能定位 service.yaml(E1 回归)。"""
+    suite = make_suite(tmp_path, "fx_echo", services=(ECHO,), cases=GOOD_CASES)
+    (suite / "test_extra.py").write_text(
+        'def test_escape(dbus_service):\n'
+        '    assert dbus_service.call("Echo", "x") == "x"\n',
+        encoding="utf-8",
+    )
+    repo = Path(__file__).resolve().parent.parent
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", str(suite), "-q"],
+        capture_output=True,
+        text=True,
+        cwd=repo,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr

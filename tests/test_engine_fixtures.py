@@ -461,3 +461,21 @@ cases:
     assert cov.executed_by == ["healthy-echo"], cov.executed_by
     # 预期错误也算成功执行:该成员确实被调到且行为符合预期
     assert result.coverage.get(ECHO, "Boom") is not None
+
+
+def test_wait_signal_index_selects_nth_payload(tmp_path: Path) -> None:
+    """wait-signal.index:断言第 N 次发射的载荷(R2 系列外的 C2 能力回归)。"""
+    suite = _suite(
+        tmp_path,
+        """apiVersion: v1
+cases:
+  - name: second-ping
+    steps:
+      - call: {method: Ping}
+      - call: {method: Ping}
+      - wait-signal: {name: Pinged, index: 1}
+        expect: {value: 2}
+""",
+    )
+    result = _run(suite)
+    assert result.cases[0].status == "pass", result.cases[0].detail

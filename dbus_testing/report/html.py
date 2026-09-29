@@ -34,7 +34,6 @@ _DECLARED_LABEL = {
     "only-baseline": "仅基线存在",
     "only-runtime": "仅运行时存在",
     "mismatch": "签名不一致",
-    "no-src": "无源码声明",
     "unknown": "未知",
 }
 _KIND_LABEL = {"added": "新增", "removed": "删除", "changed": "变更"}

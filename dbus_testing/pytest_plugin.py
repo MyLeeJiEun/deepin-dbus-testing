@@ -152,27 +152,38 @@ class YamlCase(pytest.Item):
 # --------------------------------------------------------------------------- fixtures
 
 
-@pytest.fixture(scope="session")
-def dbus_tests_dir(request: pytest.FixtureRequest) -> Path:
-    """当前测试文件所在的 tests/dbus 目录(需含 service.yaml)。"""
-    start = Path(str(request.node.fspath)).parent
+def _find_suite(start: Path) -> Path:
+    """向上查找包含 service.yaml 的套件目录。"""
     for candidate in [start, *start.parents]:
         if (candidate / SERVICE_FILENAME).exists():
             return candidate
     raise pytest.UsageError(f"在 {start} 及其父目录中找不到 {SERVICE_FILENAME}")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
+def dbus_tests_dir(request: pytest.FixtureRequest) -> Path:
+    """当前测试文件所在的 tests/dbus 目录(需含 service.yaml)。
+
+    function 作用域并用用例自身路径定位:session 级 fixture 的 request.node
+    是 Session,路径是 rootdir,`pytest <目录>` 时会解析到错误位置(E1)。
+    """
+    node = request.node
+    start = Path(str(getattr(node, "path", None) or node.fspath)).parent
+    return _find_suite(start)
+
+
+@pytest.fixture
 def dbus_context(dbus_tests_dir: Path, pytestconfig: pytest.Config) -> RunContext:
     return _manager_for(dbus_tests_dir / SERVICE_FILENAME, pytestconfig).context
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def dbus_bus(dbus_tests_dir: Path, pytestconfig: pytest.Config) -> str:
     from .core.bus import BusType
 
-    manager = _manager_for(dbus_tests_dir / SERVICE_FILENAME, pytestconfig)
-    return manager.ensure().env[BusType.SESSION.env_name]
+    return _manager_for(dbus_tests_dir / SERVICE_FILENAME, pytestconfig).ensure().env[
+        BusType.SESSION.env_name
+    ]
 
 
 class ServiceProxy:
@@ -220,7 +231,7 @@ class ServiceProxy:
             raise AssertionError(f"写属性 {prop} 失败: {out.error_name}: {out.error_message}")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def dbus_service(dbus_context: RunContext) -> ServiceProxy:
     return ServiceProxy(dbus_context)
 

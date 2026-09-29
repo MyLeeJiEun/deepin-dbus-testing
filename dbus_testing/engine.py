@@ -24,7 +24,7 @@ from .errors import (
     ReadyTimeout,
     SignalTimeout,
 )
-from .model import Case, IgnoreSpec, ServiceSpec, Step, load_cases
+from .model import UNSET, Case, IgnoreSpec, ServiceSpec, Step, load_cases
 from .results import (
     CallOutcome,
     CaseResult,
@@ -420,7 +420,7 @@ def evaluate(step: Step, outcome: CallOutcome) -> tuple[bool, str]:
         checks.append(f"type={exp.type}")
 
     # 5) value
-    if exp.value is not step.expect.__class__.__dataclass_fields__["value"].default:
+    if exp.value is not UNSET:
         expected = exp.value
         actual = outcome.value
         if _normalize_for_compare(expected) != _normalize_for_compare(actual):
@@ -531,15 +531,17 @@ class Engine:
             raise SignalTimeout(
                 f"信号 {step.target.member} 未布扣", signal=step.target.member, received=[]
             )
+        index = step.index
         timeout = self._timeout(step, ctx, 5.0)
-        got = wait_until(lambda: bool(received), timeout)
+        got = wait_until(lambda: len(received) > index, timeout)
         if not got:
             raise SignalTimeout(
-                f"等待信号 {step.target.member} 超时({timeout}s)",
+                f"等待信号 {step.target.member} 第 {index + 1} 次发射超时({timeout}s),"
+                f"实收 {len(received)} 条",
                 signal=step.target.member,
                 received=list(received),
             )
-        payload = received[0]
+        payload = received[index]
         return CallOutcome(ok=True, value=payload, signature="")
 
     def _check_contract(self, ctx: RunContext) -> CallOutcome:
