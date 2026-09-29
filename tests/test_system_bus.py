@@ -84,3 +84,97 @@ cases:
     )
     result = run_suite(suite, include_static=False).result
     assert result.ok, [(c.name, c.status, c.detail) for c in result.cases]
+
+
+def test_attach_honors_system_bus(tmp_path: Path) -> None:
+    """attach + system-bus: true:主交互总线必须切到 system 总线(R3 回归)。
+
+    修复前 attach 分支硬编码只读 session 地址,system 总线上的服务完全
+    不可见,scan 报 0 个对象且退出码 0。
+    """
+    import os
+    import subprocess
+    import sys
+    import time
+
+    from dbus_testing.core.bus import BusType, PrivateBus
+    from dbus_testing.engine import Session
+    from dbus_testing.model import load_service
+    from dbus_testing.scanner import normalize_tree, snapshot
+    from tests.fixtures import fixture_path
+
+    suite = make_suite(
+        tmp_path,
+        "fx_sysecho",
+        services=("org.example.SysEcho",),
+        mode="attach",
+        extra_service="system-bus: true\n",
+    )
+    spec = load_service(suite / "service.yaml")
+    sbus = PrivateBus(BusType.SESSION)
+    ybus = PrivateBus(BusType.SYSTEM)
+    saddr, yaddr = sbus.start(), ybus.start()
+    env = dict(os.environ)
+    env["DBUS_SESSION_BUS_ADDRESS"] = saddr
+    env["DBUS_SYSTEM_BUS_ADDRESS"] = yaddr
+    proc = subprocess.Popen(
+        [sys.executable, str(fixture_path("fx_sysecho"))],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    saved = (
+        os.environ.get(BusType.SESSION.env_name),
+        os.environ.get(BusType.SYSTEM.env_name),
+    )
+    try:
+        time.sleep(1.0)
+        os.environ[BusType.SESSION.env_name] = saddr
+        os.environ[BusType.SYSTEM.env_name] = yaddr
+        with Session(spec) as session:
+            assert session.client is not None
+            tree = snapshot(session.client, spec.services, spec.ignore)
+            contract = normalize_tree(tree, spec.ignore)
+        assert 'interface name="org.example.SysEcho"' in contract, contract
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+        for key, value in zip(
+            (BusType.SESSION.env_name, BusType.SYSTEM.env_name), saved, strict=True
+        ):
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        sbus.stop()
+        ybus.stop()
+
+
+def test_attach_system_bus_requires_address(tmp_path: Path) -> None:
+    """attach + system-bus: true 但环境没有 DBUS_SYSTEM_BUS_ADDRESS → fail-fast。"""
+    import os
+
+    from dbus_testing.core.bus import BusType
+    from dbus_testing.engine import Session
+    from dbus_testing.errors import DbusTestingError
+    from dbus_testing.model import load_service
+
+    suite = make_suite(
+        tmp_path,
+        "fx_sysecho",
+        services=("org.example.SysEcho",),
+        mode="attach",
+        extra_service="system-bus: true\n",
+    )
+    spec = load_service(suite / "service.yaml")
+    saved = os.environ.pop(BusType.SYSTEM.env_name, None)
+    try:
+        with pytest.raises(DbusTestingError, match="DBUS_SYSTEM_BUS_ADDRESS"):
+            session = Session(spec)
+            try:
+                session.start()
+            finally:
+                session.stop()
+    finally:
+        if saved is not None:
+            os.environ[BusType.SYSTEM.env_name] = saved

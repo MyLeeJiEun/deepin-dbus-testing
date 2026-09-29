@@ -110,6 +110,12 @@ class Session:
         if spec.mode == "attach":
             bus_env = attach_bus_env(BusType.SESSION)
             address = bus_env[BusType.SESSION.env_name]
+            if spec.system_bus:
+                # attach 也认 system-bus: true(R3):主交互总线切到真实系统总线,
+                # 客户端/快照/契约校验都走它;环境没设地址时 fail-fast,
+                # 绝不静默错总线(修前会连 session 总线然后报 0 对象、退出码 0)。
+                bus_env.update(attach_bus_env(BusType.SYSTEM))
+                address = bus_env[BusType.SYSTEM.env_name]
         else:
             self.bus = PrivateBus(BusType.SESSION)
             session_address = self.bus.start()
@@ -723,9 +729,9 @@ def build_coverage(
                     declared="unknown",
                 )
                 matrix.add(cov)
-            if case.name in ok_targets.get((step.target.interface, step.target.member), []):
-                if case.name not in cov.executed_by:
-                    cov.executed_by.append(case.name)
+            ok_names = ok_targets.get((step.target.interface, step.target.member), [])
+            if case.name in ok_names and case.name not in cov.executed_by:
+                cov.executed_by.append(case.name)
     return matrix
 
 

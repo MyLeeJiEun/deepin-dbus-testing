@@ -460,4 +460,4 @@ cases:
     cov = result.coverage.get(ECHO, "Echo")
     assert cov.executed_by == ["healthy-echo"], cov.executed_by
     # 预期错误也算成功执行:该成员确实被调到且行为符合预期
-    boom = result.coverage.get(ECHO, "Boom")
+    assert result.coverage.get(ECHO, "Boom") is not None
