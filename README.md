@@ -98,6 +98,7 @@ outdir/
 - [docs/design.md](docs/design.md) —— 设计方案(背景、选型调研、架构决策与依据)
 - [docs/development.md](docs/development.md) —— 开发文档(实现规格、模块 API、阶段验收)
 - [docs/architecture.md](docs/architecture.md) —— 架构图(模块依赖 / 运行时序 / 契约数据流 / 关键边界)
+- [skills/dbus-testing-init](skills/dbus-testing-init/SKILL.md) —— 接入向导 Skill:在业务仓里走完 init → 审阅基线 → 补用例 → 验证提交
 - `examples/pinyin1`(T1)、`examples/graphic1`(T1)、`examples/application-manager1`(T3 + 依赖 mock) —— 可直接抄的样板配置
 
 ## 许可
