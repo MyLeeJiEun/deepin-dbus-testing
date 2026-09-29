@@ -414,12 +414,26 @@ def cmd_check(ns: argparse.Namespace) -> int:
             result.static_skipped = (
                 f"仓内未找到源码声明 XML(src-xml-globs={list(spec.src_xml_globs)})"
             )
-            result.cases.append(
-                synthetic_case(
-                    "contract-static", "skip", summary=result.static_skipped
+            if ns.strict:
+                # --strict:SKIP 不再静默放行——门禁空转必须显式失败(R3 系列审阅)
+                result.cases.append(
+                    synthetic_case(
+                        "contract-static",
+                        "fail",
+                        code="E_CONFIG_INVALID",
+                        summary="静态契约校验被跳过且启用了 --strict",
+                        detail=result.static_skipped,
+                        hint="在 service.yaml 补 src-xml-globs 指向源码声明 XML,或去掉 --strict",
+                    )
                 )
-            )
-            print(f"SKIP 静态契约校验:{result.static_skipped}")
+                print(f"FAIL 静态契约校验被跳过(--strict):{result.static_skipped}")
+            else:
+                result.cases.append(
+                    synthetic_case(
+                        "contract-static", "skip", summary=result.static_skipped
+                    )
+                )
+                print(f"SKIP 静态契约校验:{result.static_skipped}")
         else:
             deltas = static_diff(src, baseline)
             result.static_contract = deltas
@@ -488,6 +502,7 @@ def cmd_run(ns: argparse.Namespace) -> int:
         timeout_scale=float(ns.timeout_scale),
         case_filter=ns.k,
         include_static=not ns.no_static,
+        static_strict=ns.strict,
     )
     result = outcome.result
     if not result.cases:
@@ -586,12 +601,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--static", action="store_true", help="源码声明 XML vs 基线(不起服务,秒级)"
     )
     p_check.add_argument("--report", help="报告输出目录")
+    p_check.add_argument(
+        "--strict",
+        action="store_true",
+        help="源码声明 XML 未命中 src-xml-globs 时按失败处理(默认 SKIP 退出码 0)",
+    )
     p_check.set_defaults(func=cmd_check)
 
     p_run = sub.add_parser("run", parents=[common], help="执行声明式用例并产出报告")
     p_run.add_argument("dir", help="tests/dbus 目录")
     p_run.add_argument("--report", help="报告输出目录")
     p_run.add_argument("-k", help="只跑名字包含该子串的用例")
+    p_run.add_argument(
+        "--strict",
+        action="store_true",
+        help="源码声明 XML 未命中 src-xml-globs 时按失败处理(默认 SKIP,不影响退出码)",
+    )
     p_run.add_argument("--timeout-scale", default=1.0, type=float, help="统一放大所有超时")
     p_run.add_argument("--shell", action="store_true", help="跑完进入带总线环境变量的调试 shell")
     p_run.add_argument("--no-static", action="store_true", help="跳过源码声明比对")

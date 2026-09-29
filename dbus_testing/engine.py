@@ -791,6 +791,7 @@ def run_suite(
     timeout_scale: float = 1.0,
     case_filter: str | None = None,
     include_static: bool = True,
+    static_strict: bool = False,
 ) -> SuiteOutcome:
     """CLI `run` 的实现:建会话 → 编译用例 → 执行 → 汇总覆盖矩阵。"""
     from .model import load_service
@@ -826,6 +827,18 @@ def run_suite(
     if include_static:
         if src_xml is None:
             result.static_skipped = "仓内未找到源码声明 XML(src-xml-globs 无命中)"
+            if static_strict:
+                # --strict:SKIP 不再静默放行(R3 系列审阅)——门禁空转必须显式失败
+                result.cases.append(
+                    synthetic_case(
+                        "contract-static",
+                        "fail",
+                        code="E_CONFIG_INVALID",
+                        summary="静态契约校验被跳过且启用了 --strict",
+                        detail=result.static_skipped,
+                        hint="在 service.yaml 补 src-xml-globs 指向源码声明 XML,或去掉 --strict",
+                    )
+                )
         elif baseline:
             result.static_contract = static_diff(src_xml, baseline)
             if result.static_contract:
