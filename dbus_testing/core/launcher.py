@@ -77,6 +77,11 @@ class ServiceHandle:
         lines = list(self._lines)[-n:]
         return "\n".join(lines)
 
+    def settle_output(self, timeout: float = 0.2) -> None:
+        """进程死后短暂等 reader 线程排空缓冲,避免诊断吞掉最后几行输出。"""
+        if self._reader is not None:
+            self._reader.join(timeout=timeout)
+
     def terminate(self) -> None:
         if self.process is None:
             return
@@ -202,6 +207,7 @@ class Launcher:
         deadline = time.monotonic() + spec.ready.timeout
         while True:
             if not handle.is_alive():
+                handle.settle_output()
                 raise ProcessDied(
                     f"被测进程在就绪前退出(exit={handle.exit_code})",
                     exit_code=handle.exit_code,

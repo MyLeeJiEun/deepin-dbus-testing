@@ -150,10 +150,15 @@ def test_attach_honors_system_bus(tmp_path: Path) -> None:
         ybus.stop()
 
 
-def test_attach_system_bus_requires_address(tmp_path: Path) -> None:
-    """attach + system-bus: true 但环境没有 DBUS_SYSTEM_BUS_ADDRESS → fail-fast。"""
-    import os
+def test_attach_system_bus_requires_address(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """attach + system-bus: true 但环境没有 DBUS_SYSTEM_BUS_ADDRESS → fail-fast。
 
+    SESSION 地址必须显式设置:attach 分支先取 SESSION 再查 SYSTEM,
+    依赖外部环境恰有 SESSION 变量会让这条测试换个环境就失败。
+    SESSION 只在此处被读取(raise 发生在 BusClient 连接之前),无需真实总线。
+    """
     from dbus_testing.core.bus import BusType
     from dbus_testing.engine import Session
     from dbus_testing.errors import DbusTestingError
@@ -167,14 +172,11 @@ def test_attach_system_bus_requires_address(tmp_path: Path) -> None:
         extra_service="system-bus: true\n",
     )
     spec = load_service(suite / "service.yaml")
-    saved = os.environ.pop(BusType.SYSTEM.env_name, None)
-    try:
-        with pytest.raises(DbusTestingError, match="DBUS_SYSTEM_BUS_ADDRESS"):
-            session = Session(spec)
-            try:
-                session.start()
-            finally:
-                session.stop()
-    finally:
-        if saved is not None:
-            os.environ[BusType.SYSTEM.env_name] = saved
+    monkeypatch.delenv(BusType.SYSTEM.env_name, raising=False)
+    monkeypatch.setenv(BusType.SESSION.env_name, "unix:path=/tmp/dbus-testing-unused")
+    with pytest.raises(DbusTestingError, match="DBUS_SYSTEM_BUS_ADDRESS"):
+        session = Session(spec)
+        try:
+            session.start()
+        finally:
+            session.stop()

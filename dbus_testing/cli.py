@@ -511,6 +511,15 @@ def cmd_run(ns: argparse.Namespace) -> int:
         print("警告:未找到任何用例(tests.yaml 缺失或被 -k 过滤掉),仅做了契约快照")
     _print_summary(result)
     _write_reports(result, Path(ns.report) if ns.report else None)
+    if ns.keep_bus:
+        print()
+        print("  --keep-bus:环境已保留,手工排障:")
+        print(f'    export {BusType.SESSION.env_name}="{result.env.get("bus_address", "")}"')
+        if result.env.get("system_bus_address"):
+            print(f'    export {BusType.SYSTEM.env_name}="{result.env["system_bus_address"]}"')
+        if result.env.get("sandbox_home"):
+            print(f'    export HOME="{result.env["sandbox_home"]}"')
+        print(f'    busctl --address="{result.env.get("bus_address", "")}" list --acquired')
     if ns.shell:
         _open_shell({BusType.SESSION.env_name: result.env.get("bus_address", "")})
     return EXIT_OK if result.ok else EXIT_FAILED

@@ -144,7 +144,7 @@ graph TD
 | 总线边界 | `core/bus.py` | 无标准 servicedir → 真实服务激活不进来;名字表每条 daemon 独立,同名不冲突 |
 | 只读边界 | `core/guard.py` | `mode: attach` 默认只放行 `get-prop` / `check-contract` / `wait-signal` |
 | 写入边界 | `tests/test_noninvasive.py` | 写操作限白名单模块;被测仓只读(`chmod 0o500` 后仍跑通) |
-| 契约边界 | `scanner/normalize.py` | 只覆盖 introspection 面:不含 annotation、时序/并发语义、总线策略 |
+| 契约边界 | `scanner/normalize.py` | 只覆盖 introspection 面:不含 annotation、时序/并发语义、总线策略;**参数名不参与比对**(D-Bus 按位置传参,改名不报漂移) |
 
 ## 6. 文件地图
 

@@ -180,11 +180,22 @@ def diagnose(exc: BaseException) -> Diagnosis:
         )
 
     if isinstance(exc, ConfigError):
+        # 成因分流:与 ProcessDied 的 _DISPLAY_HINTS 同一套路——按消息关键字给可操作提示
+        msg = exc.message
+        if any(k in msg for k in ("不存在", "No such file", "无法读取配置文件")):
+            hint = (
+                "路径不存在:检查 --build-dir / 相对路径是否正确,"
+                "或先跑 `dbus-testing scan <dir> --emit` 生成基线"
+            )
+        elif "apiVersion" in msg:
+            hint = "apiVersion 只支持 v1;升级框架版本或修改配置"
+        else:
+            hint = "对照 docs/primitives.md 检查字段拼写;未知字段会被拒绝以避免静默失效"
         return Diagnosis(
             exc.code,
             "配置错误",
-            exc.message,
-            "对照 docs/primitives.md 检查字段拼写;未知字段会被拒绝以避免静默失效",
+            msg,
+            hint,
         )
 
     if isinstance(exc, AssertionFailed):

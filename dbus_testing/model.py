@@ -542,6 +542,13 @@ def _parse_expect(raw: Any) -> Expect:
     _ensure_empty(d, "expect")
     if error is not UNSET and error is not None and not isinstance(error, str):
         raise ConfigError("expect.error 必须是 null、\"*\" 或 DBus 错误名字符串")
+    if error is not UNSET and error is not None and value is not UNSET:
+        # 期望出错时没有返回值可断言;静默忽略 value 违背"未知字段报错"纪律。
+        # error: null(显式断言无错)与 value 可共存,不受此限。
+        raise ConfigError(
+            "expect 的 error(期望出错)与 value(期望返回值)互斥:"
+            "出错时没有返回值;要显式断言无错请写 error: null"
+        )
     return Expect(
         signature=signature, value=value, type=type_, error=error, nonempty=nonempty
     )
