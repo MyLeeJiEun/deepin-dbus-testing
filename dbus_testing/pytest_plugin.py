@@ -52,6 +52,36 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "dbus: DBus 接口用例(由 tests.yaml 生成)")
+    _warn_if_plugin_not_installed(config)
+
+
+def _warn_if_plugin_not_installed(config: pytest.Config) -> None:
+    """插件被显式 -p 加载但未作为包安装时,提示逃生舱 fixture 的依赖关系。
+
+    本模块通常经 pytest11 entry point 自动加载;若用户把 tests/dbus 拷到别的仓、
+    或在子进程里 `python3 -m pytest`,而项目又没装上,fixture(dbus_service 等)
+    就不会出现在 fixture 列表里,报错是 'fixture not found',与插件本身无关——
+    这种"静默缺失"极难归因,故在此主动给出可操作提示。
+    """
+    try:
+        from importlib.metadata import entry_points
+
+        installed = any(
+            ep.value == "dbus_testing.pytest_plugin"
+            for ep in entry_points(group="pytest11")
+        )
+    except Exception:  # pragma: no cover - 元数据不可用的极端环境
+        return
+    if installed:
+        return
+    config.issue_config_time_warning(
+        pytest.PytestConfigWarning(
+            "dbus_testing 插件未被安装(无 pytest11 entry point),当前是显式 -p 加载。"
+            "若逃生舱用例报 \"fixture 'dbus_service' not found\",请在本仓执行 "
+            "`pip install -e .`(或给 pytest 加 -p dbus_testing.pytest_plugin)。"
+        ),
+        stacklevel=2,
+    )
 
 
 def _build_dir(config: pytest.Config) -> Path | None:

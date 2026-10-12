@@ -23,6 +23,10 @@ jobs:
           python3 -m pip install --break-system-packages 'python-dbusmock>=0.30'
           # ruff 为建议性检查,失败不阻塞
           python3 -m pip install --break-system-packages ruff || true
+          # 安装本项目本身:注册 pytest11 entry point。
+          # 不装则子进程 `python3 -m pytest` 发现不到 dbus_testing 插件,
+          # fixture(dbus_service 等)静默缺失——真实用户走 pip/apt 安装的路径必须被覆盖(C6)。
+          python3 -m pip install --break-system-packages .
 
       - name: 不侵入约束守卫(必须先跑,防实现期漂移)
         run: python3 -m pytest tests/test_noninvasive.py -v

@@ -361,12 +361,31 @@ def test_reap_removes_leftover_private_buses(tmp_path: Path) -> None:
 
     assert code == EXIT_OK
     assert not leftover.exists()
-    # daemon 收到 SIGTERM 后异步退出,轮询确认
-    for _ in range(20):
-        if not Path(f"/proc/{bus.pid}").exists():
-            break
+    # daemon 收到 SIGTERM 后异步退出,轮询确认。
+    # 判定用进程**状态**而非 /proc 存在性:僵尸进程(Z)仍有 /proc 条目,
+    # 而是否为孤儿 reap 由 PID 1 决定——CI 容器的 PID 1 不 reap 非自己子进程,
+    # daemon 会长期停留为僵尸,使 /proc 判定必然失败(C6)。
+    assert _wait_until_exited(bus.pid), "遗留总线未被回收"
+
+
+def _proc_state(pid: int) -> str:
+    """读 /proc/<pid>/stat 的状态字段;进程不存在返回 '(gone)'。"""
+    try:
+        # 字段 3 是状态;comm(字段 2)含空格与括号,故从最后一个 ')' 之后切分
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        return stat[stat.rfind(")") + 1 :].split()[0]
+    except (FileNotFoundError, ProcessLookupError, IndexError):
+        return "(gone)"
+
+
+def _wait_until_exited(pid: int, timeout: float = 2.0) -> bool:
+    """等到进程退出或变为僵尸(僵尸即已终止,只待 PID 1 回收)。"""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _proc_state(pid) in ("Z", "(gone)"):
+            return True
         time.sleep(0.1)
-    assert not Path(f"/proc/{bus.pid}").exists(), "遗留总线未被回收"
+    return _proc_state(pid) in ("Z", "(gone)")
 
 
 def test_escape_hatch_fixture_resolves_suite_dir(tmp_path: Path) -> None:
@@ -378,8 +397,8 @@ def test_escape_hatch_fixture_resolves_suite_dir(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     repo = Path(__file__).resolve().parent.parent
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", str(suite), "-q"],
+    proc = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "pytest", str(suite), *_plugin_args(), "-q"],
         capture_output=True,
         text=True,
         cwd=repo,
