@@ -491,7 +491,12 @@ class Engine:
 
         if step.op == "call":
             assert step.target is not None
-            outcome = ctx.client.call(step.target, step.args, self._timeout(step, ctx, 5.0))
+            outcome = ctx.client.call(
+                step.target,
+                step.args,
+                self._timeout(step, ctx, 5.0),
+                in_signature=step.in_signature,
+            )
         elif step.op == "get-prop":
             assert step.target is not None
             outcome = ctx.client.get_prop(step.target, self._timeout(step, ctx, 5.0))

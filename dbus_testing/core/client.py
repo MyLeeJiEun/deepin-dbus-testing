@@ -259,8 +259,17 @@ class BusClient:
 
     # ------------------------------------------------------------------ 公开操作
 
-    def call(self, target: Target, args: tuple[Any, ...] = (), timeout: float = 5.0) -> CallOutcome:
-        ok, raw, sig, err, msg, elapsed = self._invoke_raw(target, args, timeout)
+    def call(
+        self,
+        target: Target,
+        args: tuple[Any, ...] = (),
+        timeout: float = 5.0,
+        *,
+        in_signature: str | None = None,
+    ) -> CallOutcome:
+        ok, raw, sig, err, msg, elapsed = self._invoke_raw(
+            target, args, timeout, signature=in_signature
+        )
         if not ok:
             return CallOutcome(False, None, "", err, msg, elapsed)
         return CallOutcome(True, unwrap_single(to_native(raw)), sig, None, None, elapsed)

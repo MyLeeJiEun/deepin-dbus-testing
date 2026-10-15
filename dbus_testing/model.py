@@ -528,6 +528,7 @@ class Step:
     index: int = 0  # wait-signal:取第 N 次发射(0 起),默认首条
     mock_template: str | None = None
     mock_method: str | None = None
+    in_signature: str | None = None  # call:显式入参签名(如 "saq"),覆盖推断
     line: int = 0
 
 
@@ -613,10 +614,19 @@ def _parse_step(entry: dict[str, Any], spec: ServiceSpec) -> Step:
     if op == "call":
         body = _as_dict(_pop(entry, "call"), "call")
         args = _args_tuple(_pop(body, "args", ()))
+        in_sig = _opt_str(_pop(body, "signature", None), "call.signature")
         target = _parse_target(body, spec, member_key="method")
         _ensure_empty(body, "call")
         _ensure_empty(entry, f"tests.yaml:{line} 步骤")
-        return Step(op="call", target=target, args=args, expect=expect, timeout=timeout, line=line)
+        return Step(
+            op="call",
+            target=target,
+            args=args,
+            expect=expect,
+            timeout=timeout,
+            in_signature=in_sig,
+            line=line,
+        )
 
     if op in ("get-prop", "set-prop"):
         body = _as_dict(_pop(entry, op), op)
