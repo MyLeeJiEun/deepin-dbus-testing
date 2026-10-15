@@ -213,7 +213,7 @@ class Launcher:
                 raise ProcessDied(
                     f"被测进程在就绪前退出(exit={handle.exit_code})",
                     exit_code=handle.exit_code,
-                    output=handle.output_tail(80),
+                    output=handle.output_tail(200),
                     argv=handle.argv,
                 )
             missing = [n for n in expected if not client.name_has_owner(n)]
@@ -226,7 +226,7 @@ class Launcher:
                     expected=expected,
                     missing=missing,
                     acquired=client.list_acquired_names(),
-                    output=handle.output_tail(80),
+                    output=handle.output_tail(200),
                     alive=handle.is_alive(),
                 )
             time.sleep(0.1)
