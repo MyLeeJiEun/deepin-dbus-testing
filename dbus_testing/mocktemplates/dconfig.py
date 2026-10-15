@@ -1,4 +1,5 @@
 import dbus
+from typing import Any
 
 """org.desktopspec.ConfigManager(dconfig-daemon)替身。
 
@@ -35,7 +36,72 @@ _EMPTY_LIST_JSON = "[]"
 _DEFAULT_VERSION = ""
 
 
+def _to_variant_literal(value: Any) -> str:
+    """把 params.values 里的原生值转成 dbusmock exec 代码的 Variant 构造串。
+
+    支持:bool -> dbus.Boolean、int -> dbus.Int32、float -> dbus.Double、
+    str -> dbus.String、list -> JSON 字符串(a{sv} 客户端按约定自解)。
+    dbusmock 的 exec 环境有 dbus 模块(dbus-python 装了它才有),Boolean/
+    Int32/Double/String 均可直接用;只有 dbus.Variant 不可用(实测)。
+    """
+    if isinstance(value, bool):
+        return f"dbus.Boolean({value})"
+    if isinstance(value, int):
+        return f"dbus.Int32({value})"
+    if isinstance(value, float):
+        return f"dbus.Double({value})"
+    if isinstance(value, str):
+        return f"dbus.String({value!r})"
+    # list/dict 等:JSON 序列化成字符串,与 _EMPTY_LIST_JSON 的兜底同路
+    import json
+
+    return f"dbus.String({json.dumps(value, ensure_ascii=False)!r})"
+
+
+def _encode_value(value: Any) -> str:
+    """把原生值编码为类型化字符串(b:/i:/d:/s:/j:),见 load() 注释。"""
+    if isinstance(value, bool):
+        return f"b:{'true' if value else 'false'}"
+    if isinstance(value, int):
+        return f"i:{value}"
+    if isinstance(value, float):
+        return f"d:{value}"
+    if isinstance(value, str):
+        return f"s:{value}"
+    import json
+    return f"j:{json.dumps(value, ensure_ascii=False)}"
+
+
 def load(mock, parameters):  # noqa: ANN001, ANN201 - dbusmock 模板签名
+    # params.values: key -> 类型化编码字符串。**为什么是字符串编码而非原生值**:
+    # dbusmock 的 parameters 走 a{sv} D-Bus 传输,实测所有标量都被改写成
+    # dbus.Boolean(True)(类型信息全丢);字符串是唯一保真的载体。
+    # 编码格式(见 _encode_value): "b:true" / "i:3" / "d:1.5" / "s:info"
+    #   / "j:<json>"(列表/对象)。未列出的 key 走空 JSON 兜底。
+    values: dict[str, str] = {}
+    for k, v in dict(parameters.get("values") or {}).items():
+        if isinstance(v, dbus.String):
+            v = str(v)
+        if not isinstance(v, str):
+            # 兜容:调用方仍传了原生值(单进程内直连场景),当场编码
+            v = _encode_value(v)
+        values[str(k)] = v
+
+    # 生成查表 exec 代码。exec 环境(实测):
+    #   - 入参在 args 列表里(args[0] = key),无具名形参
+    #   - globals() 是 dbusmock.mockobject 模块,不可依赖 import
+    if values:
+        lit_map = "{" + ", ".join(f"{k!r}: {v!r}" for k, v in values.items()) + "}"
+        value_impl = (
+            f"_m = {lit_map}; _e = _m.get(args[0], 'j:{_EMPTY_LIST_JSON}'); "
+            "_t, _p = _e.split(':', 1); "
+            "ret = (dbus.Boolean(_p == 'true') if _t == 'b' else "
+            "(dbus.Int32(int(_p)) if _t == 'i' else "
+            "(dbus.Double(float(_p)) if _t == 'd' else dbus.String(_p))))"
+        )
+    else:
+        value_impl = f'ret = "{_EMPTY_LIST_JSON}"'
+
     # spawn 自动创建 MAIN_OBJ("/") 上的主对象,这里只补方法
     mock.AddMethods(
         MAIN_IFACE,
@@ -58,9 +124,8 @@ def load(mock, parameters):  # noqa: ANN001, ANN201 - dbusmock 模板签名
             "KeyList": dbus.Array([], signature="s"),
         },
         [
-            # dbusmock exec 环境里没有 dbus.Variant,直接用字符串;
-            # DTK/go-dconfig 客户端拿到底层 a{sv} JSON 后自行反序列化
-            ("value", "s", "v", f'ret = "{_EMPTY_LIST_JSON}"'),
+            # 按 params.values 精确返回(类型正确),未配置的 key 返回空 JSON 兜底
+            ("value", "s", "v", value_impl),
             ("setValue", "sv", "", ""),
             ("isDefaultValue", "s", "b", "ret = False"),
             ("reset", "s", "", ""),

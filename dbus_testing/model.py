@@ -286,6 +286,16 @@ def _parse_sandbox(raw: Any) -> SandboxSpec:
     return SandboxSpec(home=home, env=env)  # type: ignore[arg-type]
 
 
+def _strip_line_keys(value: Any) -> Any:
+    """递归剥掉行号标记(LINE_KEY 会注入所有 mapping,包括 params.values
+    这类嵌套 dict;残留在 params 里会被当成模板参数传给 dbusmock)。"""
+    if isinstance(value, dict):
+        return {k: _strip_line_keys(v) for k, v in value.items() if k != LINE_KEY}
+    if isinstance(value, list):
+        return [_strip_line_keys(v) for v in value]
+    return value
+
+
 def _parse_needs(raw: Any) -> tuple[MockSpec, ...]:
     if raw is None:
         return ()
@@ -301,8 +311,7 @@ def _parse_needs(raw: Any) -> tuple[MockSpec, ...]:
         if not isinstance(template, str):
             raise ConfigError("needs[].mock 必须是字符串")
         bus = _one_of(_pop(d, "bus", None), ("session", "system"), "needs[].bus", "session")
-        params = _as_dict(_pop(d, "params", None), "needs[].params")
-        params.pop(LINE_KEY, None)
+        params = _strip_line_keys(_as_dict(_pop(d, "params", None), "needs[].params"))
         _ensure_empty(d, "needs[]")
         out.append(MockSpec(template=template, bus=bus, params=params))  # type: ignore[arg-type]
     return tuple(out)
