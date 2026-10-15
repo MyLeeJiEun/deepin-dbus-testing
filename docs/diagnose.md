@@ -386,7 +386,7 @@ gdbus call --session --dest <svc> --object-path <path> --method <iface>.<method>
 
 | 症状 | 原因 | 修正 |
 |---|---|---|
-| `E_CONFIG_INVALID: needs 里有 bus: system 的 mock,请在 service.yaml 加 system-bus: true` | needs 里声明了 system 总线的 mock,但配置没启用私有 system bus → mock 会回退到**真实 system bus**(既不密闭,又必然 already owned) | 在 service.yaml 加 `system-bus: true` |
+| ~~`E_CONFIG_INVALID: needs 里有 bus: system 的 mock,请在 service.yaml 加 system-bus: true`~~(已改为自动处理) | needs 里声明了 system 总线的 mock 但配置没启用私有 system bus | 引擎现会**自动拉起第二条私有 system 总线**供 mock 与被测进程使用(`DBUS_SYSTEM_BUS_ADDRESS` 注入),主交互总线保持 session;仅当确需主总线为 system 时才写 `system-bus: true` |
 
 ### 特殊场景:mock 已放行但服务仍报依赖缺失
 

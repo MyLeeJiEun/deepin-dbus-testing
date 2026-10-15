@@ -138,11 +138,21 @@ class Session:
             self.handle = self.launcher.attach(spec, address)
             return
 
-        if any(m.bus == "system" for m in spec.needs) and self.system_bus is None:
-            raise ConfigError(
-                f"{spec.source}: needs 里有 bus: system 的 mock,"
-                f"请在 service.yaml 加 system-bus: true,否则 mock 会回退到真实 system bus"
-            )
+        if (
+            any(m.bus == "system" for m in spec.needs)
+            and self.system_bus is None
+            and spec.mode != "attach"
+        ):
+            # 常见形态:被测服务本体在 session 总线,但它依赖的 dconfig 等
+            # 系统级服务在 system 总线。此时不要求 system-bus: true,
+            # 自动拉起第二条私有 system 总线供 mock 使用,并把地址注入
+            # 被测进程(DTK/go-dconfig 客户端按 DBUS_SYSTEM_BUS_ADDRESS 连接)。
+            # 主交互总线(就绪探测/用例调用)仍保持 session。
+            self.system_bus = PrivateBus(BusType.SYSTEM)
+            self.system_bus.start()
+            bus_env.update(self.system_bus.env)
+            if self.keep:
+                self.system_bus.keep()
 
         if spec.has_polkit_rules and not any(
             "polkit" in m.template.lower() for m in spec.needs
