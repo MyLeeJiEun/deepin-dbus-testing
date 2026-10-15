@@ -64,11 +64,19 @@ cases:
   call:
     method: Query           # 必需
     args: ["深度"]           # 缺省 [];单个非列表值等价于单元素列表
+    signature: "sas"        # 可选:显式入参签名,见下
   timeout: 5s               # 缺省 5s;接受 5 / 5.5 / "5s" / "500ms" / "2m"
   expect: {signature: as, value: ["shendu", "shenduo"]}
 ```
 
-`args` 里写 YAML 字面量,框架按 D-Bus 规则编码:字符串→`s`、整数→`i`、浮点→`d`、布尔→`b`、列表→`a?`、映射→`a{?}`。**没有入参类型标注**:需要 `y`(byte)、`u`(uint32)、`o`(object path) 等窄类型入参的方法,现阶段走 `test_extra.py` 逃生舱。
+`args` 里写 YAML 字面量,框架按 D-Bus 规则编码:字符串→`s`、整数→`i`、浮点→`d`、布尔→`b`、列表→`a?`、映射→`a{?}`。
+
+**`signature` 显式入参签名**:默认编码推断在两种场景会错,需显式指定(以 introspect 快照的入参签名为准):
+
+1. **自定义序列化类型**:`QList<quint16>` 声明为 `aq`,推断把整型列表编成 `ai`,dbus 侧报 `No such method (signature 'sai')`(dde-services xsettings 的 SetColor 实测);
+2. **空容器**:空 list 推断不出签名,报 `Unable to guess signature from an empty list`(dde-services wallpapercache 的 QVariantList=`av` 实测)。
+
+需要 `y`(byte)、`u`(uint32)、`o`(object path) 等窄类型入参的方法同样用它,不必再走 `test_extra.py` 逃生舱。
 
 签名从**回复消息**上取(低层 API 直读 `reply.get_signature()`),不是从 introspection 猜的——所以 `expect.signature` 校验的是服务真实发出的东西。
 
