@@ -122,10 +122,7 @@ def diagnose(exc: BaseException) -> Diagnosis:
 
     if isinstance(exc, MockUnfaithful):
         missing = _ctx(exc, "missing", []) or []
-        listed = "\n".join(f"  - {m}" for m in missing)
         spawn_error = _ctx(exc, "spawn_error")
-        if spawn_error:
-            listed = f"  启动失败原因: {spawn_error}" + (f"\n{listed}" if listed else "")
         snippet = ""
         if missing:
             iface, _, method = str(missing[0]).rpartition(".")
@@ -133,12 +130,39 @@ def diagnose(exc: BaseException) -> Diagnosis:
                 "\n模板片段示例(dbusmock):\n"
                 f"    dbus_object.AddMethod('{iface}', '{method}', '', '', '')"
             )
+        if missing:
+            # 缺方法:给出精确方法名与模板片段
+            listed = "\n".join(f"  - {m}" for m in missing)
+            return Diagnosis(
+                exc.code,
+                "依赖 mock 不够保真,被测服务因此失败",
+                f"被测服务调用了 mock 未实现的方法:\n{listed}{snippet}",
+                "在 dbus_testing/mocktemplates/<服务>.py 补上这些方法后重跑;"
+                "补好的模板请回贡到框架仓,所有依赖同一服务的仓都会受益",
+            )
+        if spawn_error:
+            # mock 自身没起来(缺 python-dbusmock、模板脚本报错、连不上总线等)。
+            # 这不是"缺方法",照搬会误导;必须把真实原因放出来(dde-appearance
+            # CI 实测:缺 python3-dbusmock 时错误信息被吞,只剩误导性标题)。
+            detail = f"依赖 mock 未能启动,原因:\n  {spawn_error}"
+            bus = _ctx(exc, "spawn_bus")
+            if bus:
+                detail += f"\n(mock 总线: {bus})"
+            return Diagnosis(
+                exc.code,
+                "依赖 mock 启动失败",
+                detail,
+                "按上面的原因修复(常见:安装 python3-dbusmock;"
+                "或检查 mock 模板与 params 拼写)。mock 没起来时被测服务"
+                "的依赖调用必然失败,先修好 mock 再排查其它",
+            )
+        # 无 missing 也无 spawn_error:不要编造"缺方法"标题,如实展示消息
         return Diagnosis(
             exc.code,
-            "依赖 mock 不够保真,被测服务因此失败",
-            f"被测服务调用了 mock 未实现的方法:\n{listed}{snippet}",
-            "在 dbus_testing/mocktemplates/<服务>.py 补上这些方法后重跑;"
-            "补好的模板请回贡到框架仓,所有依赖同一服务的仓都会受益",
+            "依赖 mock 状态异常",
+            exc.message,
+            "检查 needs: 的 mock 模板与被测服务的依赖调用是否匹配;"
+            "可用 --keep-bus 保留现场手工复现",
         )
 
     if isinstance(exc, ContractDrift):

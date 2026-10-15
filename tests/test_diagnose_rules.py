@@ -107,6 +107,74 @@ def test_mock_unfaithful_reports_missing_method(tmp_path: Path) -> None:
     assert "AddMethod" in d.detail
 
 
+def test_mock_unfaithful_missing_dbusmock_shows_real_reason() -> None:
+    """缺 python-dbusmock 时必须如实报"依赖 mock 启动失败"并给出原因。
+
+    回归:dde-appearance CI 实测——旧版 diagnose 对 MockUnfaithful 一律
+    渲染成"被测服务调用了 mock 未实现的方法"(missing 为空时列表为空),
+    真正原因"未安装 python-dbusmock"被吞,排障方向完全被带偏。
+    """
+    import builtins
+    import sys
+
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args, **kwargs):  # noqa: ANN002, ANN003
+        if name == "dbusmock":
+            raise ImportError("No module named 'dbusmock'")
+        return real_import(name, *args, **kwargs)
+
+    saved = sys.modules.pop("dbusmock", None)
+    builtins.__import__ = fake_import
+    try:
+        from dbus_testing.core.mockdeps import MockDeps
+        from dbus_testing.model import MockSpec
+
+        with pytest.raises(MockUnfaithful) as info:
+            MockDeps((MockSpec(template="dconfig", bus="system"),)).start(
+                "unix:path=/tmp/dbus-testing-test-nonexistent", None
+            )
+    finally:
+        builtins.__import__ = real_import
+        if saved is not None:
+            sys.modules["dbusmock"] = saved
+
+    d = diagnose(info.value)
+    assert d.code == "E_MOCK_UNFAITHFUL"
+    # 不再是误导性的"未实现的方法"标题
+    assert "未实现的方法" not in d.detail
+    # 真实原因可见
+    assert "启动失败" in d.summary
+    assert "python-dbusmock" in d.detail
+
+
+def test_mock_unfaithful_spawn_failure_shows_reason(tmp_path: Path) -> None:
+    """spawn 失败(总线不可达)时诊断必须含失败原因与总线类型,而非"缺方法"。"""
+    pytest.importorskip("dbusmock")
+    from dbus_testing.core.mockdeps import MockDeps
+    from dbus_testing.model import MockSpec
+
+    with pytest.raises(MockUnfaithful) as info:
+        MockDeps((MockSpec(template="fx_dep", bus="session"),)).start(
+            "unix:path=/tmp/dbus-testing-test-no-such-bus", None
+        )
+    d = diagnose(info.value)
+    assert "启动失败" in d.summary
+    assert "未实现的方法" not in d.detail
+    assert "spawn时环境" in d.detail  # spawn_error 保留总线环境信息
+    assert "session" in d.detail  # spawn_bus 也可见于诊断
+
+
+def test_mock_unfaithful_neither_missing_nor_spawn_shows_message() -> None:
+    """无 missing 也无 spawn_error 的兜底分支:如实展示异常消息,不编造标题。"""
+    from dbus_testing.model import MockSpec
+
+    exc = MockUnfaithful("mock xyz 状态异常", missing=[])
+    d = diagnose(exc)
+    assert "未实现的方法" not in d.detail
+    assert "mock xyz 状态异常" in d.detail
+
+
 @pytest.mark.skipif(not HAS_DBUSMOCK, reason="需要 python-dbusmock")
 def test_faithful_mock_lets_service_start(tmp_path: Path) -> None:
     """依赖 mock 补齐后,被测服务应能正常注册并通过用例。"""

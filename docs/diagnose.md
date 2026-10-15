@@ -152,7 +152,24 @@ ready:
 
 CI 慢机器不要改配置,用 `--timeout-scale 3` 统一放大。
 
-### `E_MOCK_UNFAITHFUL` —— 依赖 mock 不保真
+### `E_MOCK_UNFAITHFUL` —— 依赖 mock 不保真或未能启动
+
+这个错误码覆盖**两类**成因,诊断会按 context 自动分流,标题不同:
+
+**① mock 未能启动**(summary:`依赖 mock 启动失败`)
+
+mock 根本没起来——缺 python-dbusmock、模板脚本异常、连不上总线等。
+此时"缺失方法列表"必然是空的,旧版会误报"未实现的方法"误导排障方向
+(dde-appearance CI 实测),现在如实给出失败原因:
+
+```
+E_MOCK_UNFAITHFUL: 依赖 mock 启动失败
+依赖 mock 未能启动,原因:
+  未安装 python-dbusmock: No module named 'dbusmock'
+提示: 按上面的原因修复(常见:安装 python3-dbusmock;...)
+```
+
+**② mock 起来了但缺方法**(summary:`依赖 mock 不够保真...`)
 
 mock 起来了,但被测服务调了一个模板里没有的方法。实测过的原型:预置 dbusmock 官方 `systemd` 模板后 AM 仍 SIGABRT,mock 侧报 `UnknownMethod: Subscribe is not a valid method of interface org.freedesktop.systemd1.Manager`。
 

@@ -90,10 +90,13 @@ class MockDeps:
         try:
             import dbusmock
         except ImportError as exc:  # pragma: no cover - 依赖缺失
+            # spawn_error 必须带上:diagnose 靠它区分"mock 没起来"与"缺方法",
+            # 丢了会被误报成"被测服务调用了未实现的方法"(dde-appearance CI 实测)
             raise MockUnfaithful(
                 "配置声明了 needs:(依赖 mock),但未安装 python-dbusmock"
                 "(deb: python3-dbusmock / pip: python-dbusmock)",
                 missing=[],
+                spawn_error=f"未安装 python-dbusmock: {exc}",
             ) from exc
 
         import os
