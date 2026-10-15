@@ -208,10 +208,12 @@ class Launcher:
         while True:
             if not handle.is_alive():
                 handle.settle_output()
+                # 80 行:Go panic 的寄存器 dump 有几十行,20 行会把 panic 头
+                # (goroutine 栈顶)截掉,只剩寄存器没法定位(dde-daemon CI 实测)
                 raise ProcessDied(
                     f"被测进程在就绪前退出(exit={handle.exit_code})",
                     exit_code=handle.exit_code,
-                    output=handle.output_tail(20),
+                    output=handle.output_tail(80),
                     argv=handle.argv,
                 )
             missing = [n for n in expected if not client.name_has_owner(n)]
@@ -224,7 +226,7 @@ class Launcher:
                     expected=expected,
                     missing=missing,
                     acquired=client.list_acquired_names(),
-                    output=handle.output_tail(20),
+                    output=handle.output_tail(80),
                     alive=handle.is_alive(),
                 )
             time.sleep(0.1)
