@@ -1,3 +1,5 @@
+import dbus
+
 """org.desktopspec.ConfigManager(dconfig-daemon)替身。
 
 deepin-authentication 等系统服务在 init 阶段会通过 go-dbus-factory 的
@@ -30,6 +32,7 @@ _DEFAULT_MANAGER = "/org/desktopspec/ConfigManager/manager/0"
 
 # 对应 authentic/config 里 LimitConfig 的 JSON 数组 -> 空数组
 _EMPTY_LIST_JSON = "[]"
+_DEFAULT_VERSION = ""
 
 
 def load(mock, parameters):  # noqa: ANN001, ANN201 - dbusmock 模板签名
@@ -43,11 +46,21 @@ def load(mock, parameters):  # noqa: ANN001, ANN201 - dbusmock 模板签名
         ],
     )
 
-    mock.AddObject(_DEFAULT_MANAGER, MANAGER_IFACE, {}, [])
-    mock.AddMethods(
+    # 注意:dbusmock 的 AddMethods(iface, ...) 只作用于"当前对象",
+    # 而 AddObject 是创建新对象并切换到它 —— 所以 Manager 方法的签名
+    # 必须直接作为 AddObject 的第 4 个参数传入,事后再 AddMethods
+    # 只会改回主对象,Manager 对象仍然一个方法都没有(dde-appearance CI 实测)。
+    mock.AddObject(
+        _DEFAULT_MANAGER,
         MANAGER_IFACE,
+        {
+            "Version": _DEFAULT_VERSION,
+            "KeyList": dbus.Array([], signature="s"),
+        },
         [
-            ("value", "s", "v", f'ret = dbus.Variant("s", "{_EMPTY_LIST_JSON}")'),
+            # dbusmock exec 环境里没有 dbus.Variant,直接用字符串;
+            # DTK/go-dconfig 客户端拿到底层 a{sv} JSON 后自行反序列化
+            ("value", "s", "v", f'ret = "{_EMPTY_LIST_JSON}"'),
             ("setValue", "sv", "", ""),
             ("isDefaultValue", "s", "b", "ret = False"),
             ("reset", "s", "", ""),
@@ -57,5 +70,6 @@ def load(mock, parameters):  # noqa: ANN001, ANN201 - dbusmock 模板签名
             ("permissions", "s", "s", 'ret = "readwrite"'),
             ("flags", "s", "i", "ret = 0"),
             ("release", "", "", ""),
+            ("signal valueChanged", "s", "", ""),
         ],
     )
