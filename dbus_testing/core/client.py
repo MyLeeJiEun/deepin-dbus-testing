@@ -340,6 +340,12 @@ class BusClient:
             except BusError as exc:
                 log.debug("跳过无法 introspect 的路径 %s: %s", path, exc)
                 continue
+            if not xml.strip():
+                # 空文档合法:对象树中间节点可未注册对象(Introspect 返回空串,
+                # 如 deepin-service-manager 的根路径)。它没有接口也没有子节点
+                # 引用,对契约毫无价值;继续产出会炸下游 XML 解析,直接跳过。
+                log.debug("跳过空 introspection 文档 %s(该路径未注册对象)", path)
+                continue
             yield path, xml
             if not descend:
                 continue
