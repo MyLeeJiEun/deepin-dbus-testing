@@ -143,6 +143,41 @@ def test_src_baseline_returns_none_when_no_xml(tmp_path: Path) -> None:
     assert src_baseline_xml(tmp_path, ("api/dbus/*.xml",), IgnoreSpec()) is None
 
 
+def test_repo_root_falls_back_to_tests_layout_without_git(tmp_path: Path) -> None:
+    """无 .git 时(CI 容器常见)仓根必须退化认 <repo>/tests/dbus 布局。
+
+    修复前:找不到 .git 就回退到 tests/dbus 自身,`dde-clipboard/*.xml`
+    这类相对仓根的 glob 全部落空 → 本地 PASS、CI 报"仓内未找到源码声明 XML"。
+    """
+    from dbus_testing.model import load_service
+
+    repo = tmp_path / "repo"
+    suite = repo / "tests" / "dbus"
+    suite.mkdir(parents=True)
+    (repo / "dde-clipboard").mkdir()
+    (repo / "dde-clipboard" / "org.example.Demo.xml").write_text(
+        '<node><interface name="org.example.Demo"><method name="Ping"/></interface></node>',
+        encoding="utf-8",
+    )
+    (suite / "service.yaml").write_text(
+        "apiVersion: v1\n"
+        "process: demo\n"
+        "services: [org.example.Demo]\n"
+        "binary:\n"
+        "  search: [/bin/true]\n"
+        "src-xml-globs:\n"
+        '  - "dde-clipboard/*.xml"\n',
+        encoding="utf-8",
+    )
+    assert not (repo / ".git").exists(), "本用例专门覆盖无 .git 的 CI 场景"
+
+    spec = load_service(suite / "service.yaml")
+    assert spec.repo_root == repo, spec.repo_root
+    src = src_baseline_xml(spec.repo_root, spec.src_xml_globs, spec.ignore)
+    assert src is not None, "仓根退化失败导致源码 XML glob 落空"
+    assert "org.example.Demo" in src
+
+
 @pytest.mark.needs_dde
 def test_static_check_against_real_repo() -> None:
     """对真实仓(dde-application-manager)跑源码声明收集。"""

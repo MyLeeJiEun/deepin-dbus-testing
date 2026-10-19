@@ -481,10 +481,20 @@ def _validate_service(spec: ServiceSpec) -> None:
 
 
 def _guess_repo_root(start: Path) -> Path:
+    """从 tests/dbus 向上找仓根:优先认 .git,退化认 <repo>/tests/dbus 结构。
+
+    不能只认 .git:CI 容器里 checkout 常常不带 .git(如 actions/checkout 后
+    再容器内打包、或挂载源码目录),此时回退到 tests/dbus 自身会让
+    `src-xml-globs: dde-clipboard/*.xml` 这类相对仓根的 glob 全部落空,
+    静态校验在本地 PASS、CI 报"仓内未找到源码声明 XML"。
+    """
     cur = start.resolve()
     for parent in [cur, *cur.parents]:
         if (parent / ".git").exists():
             return parent
+    # 结构退化:tests/dbus -> 上两级就是仓根(测试目录布局是本框架约定)
+    if cur.name == "dbus" and cur.parent.name == "tests":
+        return cur.parent.parent
     return cur
 
 
